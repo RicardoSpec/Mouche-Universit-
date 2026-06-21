@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12466B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mémoire DSCG">
+  <title>Suivi mémoire & révisions — DSCG</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+
+  <!-- Avertissement stockage (affiché par app.js si localStorage indisponible) -->
+  <div class="warn" id="warnbar" hidden>Le stockage local n'est pas disponible sur ce navigateur : tes saisies ne seront pas conservées après fermeture. Pense à exporter tes données.</div>
+
+  <header class="top">
+    <div class="top-left">
+      <button class="menu-btn" id="menuBtn" aria-label="Ouvrir le menu des apps" aria-expanded="false"><span></span><span></span><span></span></button>
+      <h1>Mémoire DSCG</h1>
+    </div>
+    <span class="chip" id="hdrChip"></span>
+  </header>
+
+  <!-- Panneau lanceur d'apps (ouvert par ☰) -->
+  <div class="drawer-bg" id="drawerBg" hidden></div>
+  <aside class="drawer" id="drawer" hidden aria-label="Mes applications">
+    <div class="drawer-head">
+      <span class="drawer-title">Mes apps</span>
+      <button class="drawer-close" id="drawerClose" aria-label="Fermer le menu">&times;</button>
+    </div>
+    <nav class="app-list" id="appList"></nav>
+  </aside>
+
+  <main>
+
+    <!-- ====================== ACCUEIL ====================== -->
+    <section class="view active" id="v-home">
+      <div id="heroCard"></div>
+      <div class="card pad">
+        <div class="sec-title">Prochaines échéances</div>
+        <div id="upNext"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">En bref</div>
+        <div class="stat-grid" id="homeStats"></div>
+      </div>
+    </section>
+
+    <!-- ====================== MÉMOIRE ====================== -->
+    <section class="view" id="v-memoire">
+      <h2 class="page">Mémoire</h2>
+      <div class="card pad">
+        <div id="memoOverall"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Avancement par partie <span class="sub">— touche − / + (pas de 10 %)</span></div>
+        <div id="memoParts"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Corrections à traiter <span class="sub" id="corrCount"></span></div>
+        <div id="corrections"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Progression dans le temps</div>
+        <div class="hist" id="histChart"></div>
+        <p class="muted" style="margin:10px 0 0;font-size:12px">Les relevés viennent de ta feuille ; le point « aujourd'hui » suit ton % calculé en direct.</p>
+      </div>
+    </section>
+
+    <!-- ====================== EXAMENS ====================== -->
+    <section class="view" id="v-exams">
+      <h2 class="page">Examens DSCG</h2>
+      <p class="hint">Session 2026 — écrits du 27 au 29 octobre, oraux dès le 2 novembre. Touche un thème pour le cocher.</p>
+      <div id="examList"></div>
+      <div class="card pad" id="examFoot"></div>
+    </section>
+
+    <!-- ====================== PLANNING ====================== -->
+    <section class="view" id="v-planning">
+      <h2 class="page">Planning</h2>
+      <div class="card pad">
+        <div class="cal-nav">
+          <button class="cal-navbtn" id="calPrev" aria-label="Mois précédent">‹</button>
+          <div class="cal-month" id="calMonth"></div>
+          <button class="cal-navbtn" id="calNext" aria-label="Mois suivant">›</button>
+        </div>
+        <div class="cal-dow"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-legend">
+          <span><i class="semaine"></i>Semaine · 0,5 h</span>
+          <span><i class="weekend"></i>Week-end · 6 h</span>
+          <span><i class="conge"></i>Congé · 6 h</span>
+          <span><i class="indispo"></i>Indispo · 0 h</span>
+          <span><i class="common"></i>Jour commun Tina</span>
+          <span><i class="ev"></i>Événement</span>
+        </div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Heures dispo</div>
+        <div class="stat-grid" id="planStats"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title" id="evTitle">Événements du mois</div>
+        <div id="evList"></div>
+      </div>
+    </section>
+
+    <!-- ====================== NOTE ====================== -->
+    <section class="view" id="v-note">
+      <h2 class="page">Simulateur de note</h2>
+      <p class="hint">Ajuste chaque critère ; la note se recalcule en direct (moyenne des niveaux × 10).</p>
+      <div class="card pad">
+        <div id="noteOut"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Mémoire écrit — la forme</div>
+        <div id="critForme"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Mémoire écrit — le fond</div>
+        <div id="critFond"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Soutenance</div>
+        <div id="critSout"></div>
+      </div>
+
+      <div class="card pad">
+        <div class="sec-title">Bilan à copier</div>
+        <p class="muted" style="margin:0 0 8px;font-size:12.5px">Copie ce texte et colle-le ici dans le chat (avec une question si tu veux un coup de main).</p>
+        <textarea id="bilanText" class="bilan" readonly rows="12"></textarea>
+        <button class="btn ghost" id="bilanCopy" style="margin-top:8px">Copier le bilan</button>
+      </div>
+
+      <div class="card pad">
+        <div class="sec-title">Tes données</div>
+        <p class="muted" style="margin:0 0 10px;font-size:12.5px">Sauvegarde locale (sur cet appareil uniquement). Exporte régulièrement pour garder une copie sur ton Drive.</p>
+        <button class="btn ghost" id="btnExport">Exporter (JSON)</button>
+        <label class="btn ghost" for="fileImport" style="margin-top:8px;display:block;text-align:center;cursor:pointer">Importer (JSON)</label>
+        <input type="file" id="fileImport" accept="application/json,.json" hidden>
+        <button class="btn danger" id="btnReset" style="margin-top:8px">Réinitialiser depuis la feuille</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ====================== NAVIGATION ====================== -->
+  <nav class="tabs">
+    <button class="tab on" data-view="v-home">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Accueil</button>
+    <button class="tab" data-view="v-memoire">
+      <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M16 4v3h3"/><path d="M8 11h8M8 15h6"/></svg>Mémoire</button>
+    <button class="tab" data-view="v-exams">
+      <svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.5"/><path d="M22 9v5"/></svg>Examens</button>
+    <button class="tab" data-view="v-planning">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Planning</button>
+    <button class="tab" data-view="v-note">
+      <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg>Note</button>
+  </nav>
+
+  <!-- ====================== SCRIPTS ======================
+       data.js (données : APPS, MEMO_PARTS, EXAMS, EVENTS, NOTE_CRITERIA…)
+       doit être chargé AVANT app.js (logique, rendu, stockage). -->
+  <script src="data.js?v=1"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>
