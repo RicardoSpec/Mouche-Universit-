@@ -10,6 +10,7 @@ var APPS = [
   {name:"Musculation",               icon:"💪", ready:true,  url:"https://ricardospec.github.io/coachmuscu/"},
   {name:"Français — L'Atelier",      icon:"✏️", ready:true,  url:"https://ricardospec.github.io/Lateliergram/"},
   {name:"Anglais — English Fly",     icon:"🇬🇧", ready:true,  url:"https://ricardospec.github.io/English-Fly/"},
+  {name:"Budget — Grand livre",      icon:"💶", ready:true,  url:"https://ricardospec.github.io/Budgetisation/"},
   {name:"Suivi mémoire & révisions", icon:"📚", here:true},
   {name:"Espagnol",                  icon:"🇪🇸", ready:false}
 ];
