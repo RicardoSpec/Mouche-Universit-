@@ -1,238 +1,418 @@
 /* =========================================================
-   Suivi mémoire & révisions DSCG — data.js
-   Données uniquement (aucune logique). Chargé AVANT app.js.
-   Source : Google Sheet "Récap / Calendrier / Notation".
+   Suivi mémoire & révisions DSCG — app.js
+   Toute la logique : stockage, calculs, rendu, interactions.
+   Dépend de data.js (APPS, MEMO_PARTS, MEMO_GROUPS, CORRECTIONS,
+   HISTORY, EXAMS, MEMO_EXAM, EXAM_REVISIONS, DSCG_RULES, HOURS,
+   DAY_EXCEPTIONS, COMMON_DAYS, EVENTS, NOTE_CRITERIA, NOTE_LEVELS,
+   MEMO_TARGET, MEMO_LIMIT, SNAPSHOT).
    ========================================================= */
+"use strict";
+(function(){
 
-/* ---------- Mes autres apps (menu lanceur ☰) ----------
-   here:true = app courante · ready:true + url = cliquable · ready:false = "bientôt". */
-var APPS = [
-  {name:"Musculation",               icon:"💪", ready:true,  url:"https://ricardospec.github.io/coachmuscu/"},
-  {name:"Français — L'Atelier",      icon:"✏️", ready:true,  url:"https://ricardospec.github.io/Lateliergram/"},
-  {name:"Anglais — English Fly",     icon:"🇬🇧", ready:true,  url:"https://ricardospec.github.io/English-Fly/"},
-  {name:"Budget — Grand livre",      icon:"💶", ready:true,  url:"https://ricardospec.github.io/Budgetisation/"},
-  {name:"Suivi mémoire & révisions", icon:"📚", here:true},
-  {name:"Espagnol",                  icon:"🇪🇸", ready:false}
-];
+  /* ---------------- Stockage local ---------------- */
+  var KEY = "memoDSCG_v1";
+  var STORAGE_OK = (function(){try{var k="__t_"+Date.now();localStorage.setItem(k,"1");localStorage.removeItem(k);return true;}catch(e){return false;}})();
+  var memStore = null;
+  function rawLoad(){if(!STORAGE_OK)return memStore;try{var r=localStorage.getItem(KEY);return r?JSON.parse(r):null;}catch(e){return null;}}
+  function save(){try{var s=JSON.stringify(state);if(STORAGE_OK)localStorage.setItem(KEY,s);else memStore=s;}catch(e){}}
 
-/* ---------- Échéances & constantes ---------- */
-var MEMO_TARGET = "2026-07-27";   // objectif perso de rendu
-var MEMO_LIMIT  = "2026-08-31";   // limite de dépôt (feuille)
-var SNAPSHOT    = "2026-06-20";   // date de la photo du tableur
+  /* ---------------- État (valeurs de la feuille + saisies) ---------------- */
+  function seedState(){
+    var st={parts:{}, corr:[], rev:{}, note:{}};
+    MEMO_PARTS.forEach(function(p){st.parts[p.id]=p.pct;});
+    CORRECTIONS.forEach(function(){st.corr.push(false);});
+    Object.keys(EXAM_REVISIONS).forEach(function(ue){st.rev[ue]=EXAM_REVISIONS[ue].map(function(){return false;});});
+    ["forme","fond","soutenance"].forEach(function(g){NOTE_CRITERIA[g].forEach(function(c){st.note[c.id]=c.level;});});
+    return st;
+  }
+  function mergeState(saved){
+    var st=seedState();
+    if(!saved||typeof saved!=="object")return st;
+    if(saved.parts)for(var id in st.parts)if(typeof saved.parts[id]==="number")st.parts[id]=clamp(saved.parts[id]);
+    if(Array.isArray(saved.corr))st.corr=st.corr.map(function(v,i){return !!saved.corr[i];});
+    if(saved.rev)for(var ue in st.rev)if(Array.isArray(saved.rev[ue]))st.rev[ue]=st.rev[ue].map(function(v,i){return !!saved.rev[ue][i];});
+    if(saved.note)for(var cid in st.note)if(typeof saved.note[cid]==="number")st.note[cid]=saved.note[cid];
+    return st;
+  }
+  var state = mergeState(rawLoad());
 
-/* Matrice de conversion : type de jour -> heures dispo (feuille "Calendrier") */
-var HOURS = { semaine:0.5, weekend:6, "congé":6, indispo:0 };
+  /* ---------------- Dates ---------------- */
+  var JJ=["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
+  var MM=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+  var MOIS=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+  function parseISO(s){return new Date(s+"T00:00:00");}
+  function isoOf(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+  function todayISO(){return isoOf(new Date());}
+  function daysUntil(iso){return Math.round((parseISO(iso)-parseISO(todayISO()))/86400000);}
+  function fmtFR(iso){var d=parseISO(iso);return JJ[d.getDay()]+" "+d.getDate()+" "+MM[d.getMonth()];}
+  function ddmm(iso){var d=parseISO(iso);return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");}
+  function eachDay(a,b,cb){var d=parseISO(a),end=parseISO(b);while(d<=end){cb(isoOf(d));d.setDate(d.getDate()+1);}}
 
-/* =========================================================
-   1) AVANCEMENT DU MÉMOIRE
-   Chaque partie : poids d'effort (w) + % d'avancement (pct).
-   % global = Σ(w × pct) / Σ(w).   (pages = info secondaire)
+  /* ---------------- Utilitaires ---------------- */
+  function esc(s){return (""+(s==null?"":s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+  function clamp(n){n=Math.round(n/10)*10;return n<0?0:n>100?100:n;}
+  function fr(n,dec){return (dec?n.toFixed(dec):Math.round(n)+"").replace(".",",");}
+  function frH(h){return (h%1===0?h:h.toFixed(1).replace(".",","))+" h";}
+  function gId(id){return document.getElementById(id);}
+  function set(id,html){var el=gId(id);if(el)el.innerHTML=html;}
 
-   NB cohérence : l'en-tête de la feuille affiche "32,06 %"
-   (dernier relevé MANUEL du 15/06). Les cases par partie
-   ci-dessous calculent ≈ 42 %, ce qui correspond au point
-   du 20/06 sur la courbe de progression. Tout est modifiable.
-   ========================================================= */
-var MEMO_GROUPS = [
-  {id:"lim",     label:"Éléments liminaires"},
-  {id:"intro",   label:"Introduction"},
-  {id:"p1",      label:"Partie 1"},
-  {id:"p2",      label:"Partie 2"},
-  {id:"concl",   label:"Conclusion"},
-  {id:"ann",     label:"Annexes & bibliographie"},
-  {id:"terrain", label:"Études terrain"},
-  {id:"corr",    label:"Corrections"}
-];
+  /* ---------------- Calculs : mémoire ---------------- */
+  function partPct(id){return typeof state.parts[id]==="number"?state.parts[id]:0;}
+  function memoOverall(){var W=0,WP=0;MEMO_PARTS.forEach(function(p){W+=p.w;WP+=p.w*partPct(p.id)/100;});return W?WP/W*100:0;}
+  function groupPct(gid){var W=0,WP=0;MEMO_PARTS.forEach(function(p){if(p.g===gid){W+=p.w;WP+=p.w*partPct(p.id)/100;}});return W?WP/W*100:0;}
+  function pagesTotals(){var d=0,t=0;MEMO_PARTS.forEach(function(p){if(p.pages){d+=p.pages.done;t+=p.pages.target;}});return{done:d,target:t};}
+  function corrDone(){return state.corr.filter(Boolean).length;}
 
-var MEMO_PARTS = [
-  {id:"miseenpage", g:"lim", name:"Mise en page du mémoire",     w:0.1, pct:60},
-  {id:"garde",      g:"lim", name:"Page de garde, glossaire",    w:0.2, pct:90},
-  {id:"confid",     g:"lim", name:"Note de confidentialité",     w:0.1, pct:90},
-  {id:"remer",      g:"lim", name:"Remerciements",               w:0.5, pct:90},
-  {id:"tdm",        g:"lim", name:"Table des matières",          w:0.5, pct:30},
-  {id:"tdi",        g:"lim", name:"Table des illustrations",     w:0.5, pct:10},
-  {id:"tableaux",   g:"lim", name:"Tableaux",                    w:0.5, pct:10},
-  {id:"avpropos",   g:"lim", name:"Avant-propos",                w:1.0, pct:90},
-  {id:"attest",     g:"lim", name:"Attestation de l'employeur",  w:0.5, pct:60},
-  {id:"agrement",   g:"lim", name:"Fiche d'agrément",            w:2.0, pct:80},
-  {id:"missions",   g:"lim", name:"Missions cabinet",            w:1.0, pct:30},
+  /* ---------------- Calculs : calendrier ---------------- */
+  function dayType(iso){if(DAY_EXCEPTIONS[iso])return DAY_EXCEPTIONS[iso];var wd=parseISO(iso).getDay();return (wd===0||wd===6)?"weekend":"semaine";}
+  function dayHours(iso){return HOURS[dayType(iso)]||0;}
+  function hoursBetween(a,b){if(parseISO(b)<parseISO(a))return 0;var s=0;eachDay(a,b,function(iso){s+=dayHours(iso);});return s;}
+  function daysAvailBetween(a,b){if(parseISO(b)<parseISO(a))return 0;var n=0;eachDay(a,b,function(iso){if(dayHours(iso)>0)n++;});return n;}
+  function isCommon(iso){return COMMON_DAYS.indexOf(iso)>=0;}
 
-  {id:"intro",      g:"intro", name:"Introduction",              w:2.0, pct:90, pages:{done:3.5, target:4}},
+  /* ---------------- Calculs : examens & note ---------------- */
+  function revPct(ue){var a=state.rev[ue]||[];if(!a.length)return 0;return a.filter(Boolean).length/a.length*100;}
+  function noteMean(ids){var s=0,n=0;ids.forEach(function(id){var v=state.note[id];if(v>0){s+=v;n++;}});return n?s/n:0;}
+  function noteEcrit(){return noteMean(NOTE_CRITERIA.forme.concat(NOTE_CRITERIA.fond).map(function(c){return c.id;}))*10;}
+  function noteSout(){return noteMean(NOTE_CRITERIA.soutenance.map(function(c){return c.id;}))*10;}
+  function noteGlobal(){return noteEcrit()+noteSout();}
 
-  {id:"p1c1", g:"p1", name:"Chap. I — Une fondation solide pour des informations fiables et régulières", w:10, pct:70, pages:{done:8, target:8}},
-  {id:"p1c2", g:"p1", name:"Chap. II — L'harmonisation des procédures (efficience & pérennisation)",      w:10, pct:70, pages:{done:6, target:7}},
-  {id:"p1c3", g:"p1", name:"Chap. III — De la mesure à la valorisation (image fidèle, pilotage)",         w:10, pct:70, pages:{done:5, target:7}},
+  /* ---------------- Anneau & graphique (SVG) ---------------- */
+  function ringSVG(pct){
+    var r=48,C=2*Math.PI*r,off=C*(1-Math.max(0,Math.min(100,pct))/100);
+    return '<svg viewBox="0 0 108 108"><defs><linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1">'
+      +'<stop offset="0" stop-color="#1f6fb0"/><stop offset="1" stop-color="#F4622B"/></linearGradient></defs>'
+      +'<circle class="track" cx="54" cy="54" r="'+r+'"/>'
+      +'<circle class="fill" cx="54" cy="54" r="'+r+'" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'"/></svg>';
+  }
+  function historySVG(){
+    var pts=HISTORY.map(function(h){return{d:h.d,p:h.p};});
+    pts.push({d:todayISO(),p:memoOverall()});
+    var W=320,H=150,pl=26,pr=8,pt=8,pb=20,iw=W-pl-pr,ih=H-pt-pb;
+    var t0=parseISO(pts[0].d).getTime(), t1=parseISO(MEMO_LIMIT).getTime();
+    if(t1<=t0)t1=parseISO(pts[pts.length-1].d).getTime()+86400000;
+    function X(iso){var t=parseISO(iso).getTime();var f=(t-t0)/(t1-t0);return pl+Math.max(0,Math.min(1,f))*iw;}
+    function Y(p){return pt+(1-Math.max(0,Math.min(100,p))/100)*ih;}
+    var grid="";[0,25,50,75,100].forEach(function(g){var y=Y(g);grid+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="#eef2f6" stroke-width="1"/>';if(g%50===0)grid+='<text x="'+(pl-5)+'" y="'+(y+3).toFixed(1)+'" font-size="9" fill="#9aa7b3" text-anchor="end">'+g+'</text>';});
+    var line=pts.map(function(o,i){return (i?"L":"M")+X(o.d).toFixed(1)+" "+Y(o.p).toFixed(1);}).join(" ");
+    var dots=pts.map(function(o){return '<circle cx="'+X(o.d).toFixed(1)+'" cy="'+Y(o.p).toFixed(1)+'" r="2.4" fill="#12466B"/>';}).join("");
+    var last=pts[pts.length-1];
+    var proj="";
+    if(daysUntil(MEMO_TARGET)>0)proj='<line x1="'+X(last.d).toFixed(1)+'" y1="'+Y(last.p).toFixed(1)+'" x2="'+X(MEMO_TARGET).toFixed(1)+'" y2="'+Y(100).toFixed(1)+'" stroke="#F4622B" stroke-width="1.6" stroke-dasharray="3 3"/>'
+      +'<circle cx="'+X(MEMO_TARGET).toFixed(1)+'" cy="'+Y(100).toFixed(1)+'" r="2.6" fill="#F4622B"/>'
+      +'<text x="'+X(MEMO_TARGET).toFixed(1)+'" y="'+(Y(100)-5).toFixed(1)+'" font-size="8.5" fill="#F4622B" text-anchor="end" font-weight="700">100% • 27/07</text>';
+    var xlabs='<text x="'+X(pts[0].d).toFixed(1)+'" y="'+(H-6)+'" font-size="8.5" fill="#9aa7b3">'+ddmm(pts[0].d)+'</text>'
+      +'<text x="'+X(last.d).toFixed(1)+'" y="'+(H-6)+'" font-size="8.5" fill="#12466B" text-anchor="middle" font-weight="700">auj.</text>'
+      +'<text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="8.5" fill="#9aa7b3" text-anchor="end">'+ddmm(MEMO_LIMIT)+'</text>';
+    return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Progression du mémoire">'+grid+proj
+      +'<path d="'+line+'" fill="none" stroke="#1f6fb0" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+dots+xlabs+'</svg>';
+  }
 
-  {id:"p2c1", g:"p2", name:"Chap. I — Méthodologie de la recherche & collecte des données", w:10, pct:30, pages:{done:5, target:5}},
-  {id:"p2c2", g:"p2", name:"Chap. II — Analyse des résultats & vérification des hypothèses", w:10, pct:30, pages:{done:9, target:9}},
-  {id:"p2c3", g:"p2", name:"Chap. III — Optimisations opérationnelles & perspectives",       w:10, pct:30, pages:{done:7, target:7}},
+  /* ---------------- Compte à rebours (carte héro) ---------------- */
+  function cdBox(iso,label){
+    var d=daysUntil(iso);
+    var n=d<0?"–":d, u=d<0?"passé":(d===0?"auj.":"jours");
+    var urg=d>=0&&d<=14?" urgent":"";
+    return '<div class="cd'+urg+'"><div class="n">'+n+'</div><div class="u">'+u+'</div><div class="l">'+esc(label)+'</div></div>';
+  }
 
-  {id:"concl",   g:"concl", name:"Conclusion",                   w:5.0, pct:10, pages:{done:0, target:1}},
+  /* ---------------- Rendu : en-tête ---------------- */
+  function renderHdr(){
+    var d=daysUntil(MEMO_TARGET);
+    set("hdrChip", d>=0?("Rendu J-"+d):("Limite J-"+Math.max(0,daysUntil(MEMO_LIMIT))));
+  }
 
-  {id:"annexes", g:"ann", name:"Table des annexes",              w:5.0, pct:20, pages:{done:43.5, target:48}},
-  {id:"biblio",  g:"ann", name:"Bibliographie",                  w:1.0, pct:20},
+  /* ---------------- Rendu : Accueil ---------------- */
+  function renderHome(){
+    var ov=memoOverall(), pg=pagesTotals();
+    set("heroCard",
+      '<div class="hero"><div class="lbl">Objectif — rendu du mémoire</div>'
+      +'<h2>'+fmtFR(MEMO_TARGET)+'</h2>'
+      +'<div class="meta">Limite de dépôt : '+fmtFR(MEMO_LIMIT)+'</div>'
+      +'<div class="cd-row">'+cdBox(MEMO_TARGET,"Rendu 27/07")+cdBox(MEMO_LIMIT,"Limite 31/08")+cdBox(EXAMS[0].date,"Examens oct.")+'</div>'
+      +'<div class="hero-foot">'
+        +'<div class="hf"><div class="v">'+fr(ov,1)+'%</div><div class="k">Mémoire</div></div>'
+        +'<div class="hf"><div class="v">'+frH(dayHours(todayISO()))+'</div><div class="k">Dispo aujourd\'hui</div></div>'
+        +'<div class="hf"><div class="v">'+fr(hoursBetween(todayISO(),MEMO_LIMIT))+' h</div><div class="k">Dispo → 31/08</div></div>'
+      +'</div></div>');
 
-  {id:"sondage", g:"terrain", name:"Sondage",                    w:10, pct:10, resp:22},
-  {id:"itw",     g:"terrain", name:"Enquête / entretiens",       w:10, pct:40, resp:16.67},
+    // Prochaines échéances : événements futurs
+    var up=EVENTS.filter(function(e){return daysUntil(e.start)>=0;}).sort(function(a,b){return a.start<b.start?-1:1;}).slice(0,6);
+    set("upNext", up.length?up.map(function(e){
+      var d=daysUntil(e.start);
+      return '<div class="ev-row"><span class="ev-date">J-'+d+'</span><span class="ev-name">'+esc(e.label)+'</span><span class="ev-pill '+e.type+'">'+pillLabel(e.type)+'</span></div>';
+    }).join(""):'<p class="muted" style="margin:0">Plus d\'échéance à venir 🎉</p>');
 
-  {id:"corr",    g:"corr", name:"Traiter les prochaines corrections", w:2.0, pct:10}
-];
+    var ng=noteGlobal();
+    set("homeStats",
+      stat(fr(ov,1)+'%','Avancement du mémoire')
+      +stat(fr(ng,1)+'<span style="font-size:14px;color:var(--muted)">/20</span>','Note projetée')
+      +stat(fr(hoursBetween(todayISO(),MEMO_LIMIT))+' h','Heures dispo → 31/08')
+      +stat(daysAvailBetween(todayISO(),MEMO_LIMIT)+'','Jours dispo restants'));
+  }
+  function stat(v,k){return '<div class="stat"><div class="v">'+v+'</div><div class="k">'+esc(k)+'</div></div>';}
+  function pillLabel(t){return {ferie:"Férié",perso:"Perso",deadline:"Échéance",exam:"Examen",revision:"Révisions"}[t]||t;}
 
-/* ---------- Corrections à traiter (checklist "Prochaines corrections") ---------- */
-var CORRECTIONS = [
-  "Faire des phrases courtes",
-  "Reprendre tous les commentaires → version finale intégrant les commentaires",
-  "Vérifier la retranscription des entretiens (itw)",
-  "Vérifier la suppression des sources .com (BCG)",
-  "Conserver les échanges avec l'IA",
-  "Faire des phrases de transition avant les hypothèses de recherche (HR)",
-  "Mettre à jour le numéro des tableaux, figures et annexes",
-  "Vérifier que les locutions latines et les citations sont en italique (et les vérifier)"
-];
+  /* ---------------- Rendu : Mémoire ---------------- */
+  function renderMemo(){
+    var ov=memoOverall(), pg=pagesTotals();
+    var dAv=daysAvailBetween(todayISO(),MEMO_TARGET);
+    var need=dAv>0?(100-ov)/dAv:0;
+    set("memoOverall",
+      '<div class="ring-wrap"><div class="ring">'+ringSVG(ov)+'<div class="ring-num"><div class="p">'+fr(ov,0)+'%</div><div class="s">avancé</div></div></div>'
+      +'<div class="ring-side"><div class="big">Reste '+fr(100-ov,0)+'% avant le rendu</div>'
+      +'<div class="sm">'+(dAv>0?('Soit ~<b>'+fr(need,1)+'%</b>/jour dispo d\'ici le 27/07 ('+dAv+' j).'):'Échéance du 27/07 atteinte.')
+      +'<br>Pages rédigées : <b>'+fr(pg.done,0)+'</b> / '+pg.target+'.</div></div></div>');
 
-/* ---------- Historique d'avancement (relevés réels de la feuille) ---------- */
-var HISTORY = [
-  {d:"2026-04-26", p:3.88},
-  {d:"2026-04-27", p:4.00},
-  {d:"2026-05-14", p:11.25},
-  {d:"2026-05-15", p:12.37},
-  {d:"2026-05-16", p:16.90},
-  {d:"2026-05-18", p:18.02},
-  {d:"2026-05-23", p:19.15},
-  {d:"2026-05-24", p:19.15},
-  {d:"2026-05-25", p:27.74},
-  {d:"2026-05-30", p:27.74},
-  {d:"2026-05-31", p:27.74},
-  {d:"2026-06-07", p:28.14},
-  {d:"2026-06-15", p:32.06}
-];
+    // Parties par groupe
+    var html="";
+    MEMO_GROUPS.forEach(function(g){
+      var parts=MEMO_PARTS.filter(function(p){return p.g===g.id;});
+      if(!parts.length)return;
+      html+='<div class="grp"><div class="grp-title"><span>'+esc(g.label)+'</span><span class="gp">'+fr(groupPct(g.id),0)+'%</span></div>';
+      parts.forEach(function(p){
+        var pc=partPct(p.id), full=pc>=100;
+        var badge="";
+        if(p.pages)badge='<span class="part-pages">'+fr(p.pages.done,0)+'/'+p.pages.target+' p.</span>';
+        else if(typeof p.resp==="number")badge='<span class="part-pages">'+fr(p.resp,0)+'% rép.</span>';
+        html+='<div class="part"><div class="part-top">'
+          +'<div class="part-name">'+esc(p.name)+badge+'</div>'
+          +'<div class="part-pct'+(full?' done':'')+'">'+pc+'%</div></div>'
+          +'<div class="part-bottom"><div class="part-bar"><div class="part-fill'+(full?' full':'')+'" style="width:'+pc+'%"></div></div>'
+          +'<div class="step"><button class="step-btn" data-part="'+p.id+'" data-dir="-1"'+(pc<=0?' disabled':'')+'>−</button>'
+          +'<button class="step-btn" data-part="'+p.id+'" data-dir="1"'+(pc>=100?' disabled':'')+'>+</button></div></div></div>';
+      });
+      html+='</div>';
+    });
+    set("memoParts", html);
 
-/* =========================================================
-   2) EXAMENS DSCG — session 2026 (BO n°1 du 01/01/2026)
-   Écrits 27–29 oct. · oraux (anglais & soutenance) dès le 02 nov.
-   ========================================================= */
-var EXAMS = [
-  {id:"ue1", code:"UE1", short:"Droit", name:"Gestion juridique, fiscale et sociale", date:"2026-10-28", time:"14h–18h",     duration:"4h", coef:1.5, ects:20},
-  {id:"ue5", code:"UE5", short:"MSI",   name:"Management des systèmes d'information", date:"2026-10-29", time:"9h30–12h30", duration:"3h", coef:1,   ects:15},
-  {id:"ue3", code:"UE3", short:"MCG",   name:"Management & contrôle de gestion",      date:"2026-10-29", time:"14h–18h",     duration:"4h", coef:1.5, ects:20}
-];
-var MEMO_EXAM = {code:"UE7", name:"Mémoire — soutenance orale", date:"2026-11-02", duration:"1h max", coef:1, ects:15};
+    // Corrections
+    set("corrCount", "— "+corrDone()+"/"+CORRECTIONS.length+" faites");
+    set("corrections", CORRECTIONS.map(function(c,i){
+      var ok=state.corr[i];
+      return '<label class="check'+(ok?' ok':'')+'"><input type="checkbox" data-corr="'+i+'"'+(ok?' checked':'')+'><span class="ck-txt">'+esc(c)+'</span></label>';
+    }).join(""));
 
-/* Validation du diplôme : moyenne générale ≥ 10/20 · note éliminatoire < 6/20. */
-var DSCG_RULES = {moyenne:10, eliminatoire:6};
+    set("histChart", historySVG());
+  }
 
-/* ---------- Révisions : thèmes de départ par UE (programme DSCG, modifiables) ---------- */
-var EXAM_REVISIONS = {
-  ue1: [
-    "L'entreprise & son environnement juridique (contrats, responsabilité)",
-    "Droit des sociétés (constitution, fonctionnement, restructurations)",
-    "Pérennité de l'entreprise (difficultés, transmission)",
-    "Associations & autres groupements",
-    "Droit fiscal (IS, IR, TVA, intégration, fiscalité internationale)",
-    "Droit social (relations individuelles & collectives, protection sociale)"
-  ],
-  ue5: [
-    "Gouvernance & alignement stratégique des SI",
-    "Gestion de projet SI",
-    "Architecture, réseaux & ERP",
-    "Sécurité des SI",
-    "Données, dématérialisation & RGPD",
-    "Audit & contrôle des SI"
-  ],
-  ue3: [
-    "Diagnostic & analyse stratégique",
-    "Choix stratégiques & gouvernance",
-    "Pilotage de la performance (coûts, budgets)",
-    "Tableaux de bord & reporting",
-    "Conduite du changement & structures",
-    "Management des activités & des processus"
-  ]
-};
+  /* ---------------- Rendu : Examens ---------------- */
+  function renderExams(){
+    set("examList", EXAMS.map(function(e){
+      var d=daysUntil(e.date), urg=d>=0&&d<=21, rp=revPct(e.id), themes=EXAM_REVISIONS[e.id]||[], rev=state.rev[e.id]||[];
+      var checks=themes.map(function(t,i){
+        var ok=rev[i];
+        return '<label class="check'+(ok?' ok':'')+'"><input type="checkbox" data-ue="'+e.id+'" data-idx="'+i+'"'+(ok?' checked':'')+'><span class="ck-txt">'+esc(t)+'</span></label>';
+      }).join("");
+      return '<div class="card pad"><div class="exam">'
+        +'<div class="exam-head"><div class="exam-cd'+(urg?' urgent':'')+'"><div class="n">'+(d<0?"–":d)+'</div><div class="u">'+(d<0?"passé":"jours")+'</div></div>'
+        +'<div class="exam-info"><span class="exam-code">'+e.code+'</span>'
+        +'<div class="exam-title">'+esc(e.short)+'</div>'
+        +'<div class="exam-sub">'+esc(e.name)+'</div>'
+        +'<div class="exam-meta"><span class="exam-tag">'+fmtFR(e.date)+'</span><span class="exam-tag">'+e.time+'</span><span class="exam-tag">'+e.duration+'</span><span class="exam-tag">coef '+fr(e.coef,e.coef%1?1:0)+'</span><span class="exam-tag">'+e.ects+' ECTS</span></div>'
+        +'</div></div>'
+        +'<div class="exam-prog">Révisions : '+rev.filter(Boolean).length+'/'+themes.length+' thèmes · '+fr(rp,0)+'%</div>'
+        +'<div class="part-bar" style="margin-top:8px"><div class="part-fill'+(rp>=100?' full':'')+'" style="width:'+rp+'%"></div></div>'
+        +'<div style="margin-top:10px">'+checks+'</div>'
+        +'</div></div>';
+    }).join(""));
 
-/* =========================================================
-   3) PLANNING — jours & heures dispo (feuille "Calendrier")
-   Type par défaut : lun–ven = semaine, sam–dim = weekend.
-   DAY_EXCEPTIONS surcharge le défaut (congé / indispo).
-   COMMON_DAYS = jours "ok" communs avec Tina (repère 🟢).
-   ========================================================= */
-var DAY_EXCEPTIONS = {
-  "2026-05-01":"congé","2026-05-03":"indispo","2026-05-08":"indispo","2026-05-09":"indispo","2026-05-10":"indispo",
-  "2026-05-14":"congé","2026-05-15":"congé","2026-05-25":"congé",
-  "2026-06-06":"indispo","2026-06-22":"congé",
-  "2026-06-23":"indispo","2026-06-24":"indispo","2026-06-25":"indispo","2026-06-26":"indispo","2026-06-27":"indispo","2026-06-28":"indispo",
-  "2026-07-04":"indispo","2026-07-05":"indispo","2026-07-13":"congé","2026-07-14":"congé",
-  "2026-07-27":"congé","2026-07-28":"congé","2026-07-29":"congé","2026-07-30":"congé","2026-07-31":"congé",
-  "2026-08-01":"congé","2026-08-02":"congé","2026-08-03":"congé","2026-08-04":"congé",
-  "2026-08-05":"indispo","2026-08-06":"indispo","2026-08-07":"indispo","2026-08-08":"indispo",
-  "2026-08-09":"indispo","2026-08-10":"indispo","2026-08-11":"indispo","2026-08-12":"indispo",
-  "2026-08-13":"congé","2026-08-14":"congé","2026-08-15":"congé","2026-08-16":"congé","2026-08-17":"congé"
-};
+    var dS=daysUntil(MEMO_EXAM.date), ng=noteGlobal();
+    var elim=ng<DSCG_RULES.eliminatoire, pass=ng>=DSCG_RULES.moyenne;
+    set("examFoot",
+      '<div class="sec-title">Soutenance & validation</div>'
+      +'<div class="exam" style="border-top:none;padding-top:0"><div class="exam-head">'
+      +'<div class="exam-cd'+(dS>=0&&dS<=21?' urgent':'')+'"><div class="n">'+(dS<0?"–":dS)+'</div><div class="u">'+(dS<0?"passé":"jours")+'</div></div>'
+      +'<div class="exam-info"><span class="exam-code">'+MEMO_EXAM.code+'</span><div class="exam-title">'+esc(MEMO_EXAM.name)+'</div>'
+      +'<div class="exam-meta"><span class="exam-tag">'+fmtFR(MEMO_EXAM.date)+'</span><span class="exam-tag">'+MEMO_EXAM.duration+'</span><span class="exam-tag">coef '+MEMO_EXAM.coef+'</span><span class="exam-tag">'+MEMO_EXAM.ects+' ECTS</span></div>'
+      +'</div></div></div>'
+      +'<div style="margin-top:12px;font-size:13px;color:var(--muted);line-height:1.5">Diplôme validé si <b style="color:var(--ink)">moyenne générale ≥ 10/20</b> et <b style="color:var(--ink)">aucune note &lt; 6/20</b> (éliminatoire).</div>'
+      +'<div style="margin-top:10px;padding:11px 13px;border-radius:11px;background:'+(elim?'#fdecea':pass?'#e2f3ea':'#fff3e8')+';font-size:13px;font-weight:700;color:'+(elim?'var(--danger)':pass?'var(--done-ink)':'var(--accent)')+'">Note mémoire projetée : '+fr(ng,1)+'/20 '+(elim?'— ⚠ sous le seuil éliminatoire':pass?'— au-dessus de la moyenne ✓':'— sous la moyenne (10), à remonter')+'</div>');
+  }
 
-var COMMON_DAYS = [
-  "2026-04-25","2026-04-26","2026-05-01","2026-05-02","2026-05-14","2026-05-15","2026-05-16","2026-05-17",
-  "2026-05-30","2026-05-31","2026-06-07","2026-06-20","2026-06-21",
-  "2026-07-11","2026-07-12","2026-07-13","2026-07-14","2026-07-18","2026-07-19",
-  "2026-07-25","2026-07-26","2026-07-27","2026-07-28","2026-07-29","2026-07-30","2026-07-31",
-  "2026-08-01","2026-08-02","2026-08-03","2026-08-22","2026-08-23","2026-08-29","2026-08-30"
-];
+  /* ---------------- Rendu : Planning ---------------- */
+  var calY=2026, calM=5; // juin 2026 par défaut (mois 0-indexé)
+  function renderPlanning(){
+    var first=new Date(calY,calM,1), nb=new Date(calY,calM+1,0).getDate();
+    var off=(first.getDay()+6)%7; // lundi = 0
+    set("calMonth", MOIS[calM]+" "+calY);
+    var cells="";
+    for(var i=0;i<off;i++)cells+='<div class="cal-cell empty"></div>';
+    for(var day=1;day<=nb;day++){
+      var iso=calY+"-"+String(calM+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");
+      var t=dayType(iso), h=dayHours(iso);
+      var cls="cal-cell "+(t==="congé"?"conge":t)+(iso===todayISO()?" today":"");
+      var ev=EVENTS.some(function(e){return iso>=e.start&&iso<=(e.end||e.start);});
+      cells+='<div class="'+cls+'"><div class="d">'+day+'</div><div class="h">'+(h%1===0?h:fr(h,1))+'h</div>'
+        +(isCommon(iso)?'<span class="dot" title="Jour commun Tina"></span>':'')
+        +(ev?'<span class="ev"></span>':'')+'</div>';
+    }
+    set("calGrid", cells);
 
-/* ---------- Événements & jalons ---------- */
-var EVENTS = [
-  {start:"2026-05-01", label:"Férié — 1er mai", type:"ferie"},
-  {start:"2026-05-03", label:"Triathlon", type:"perso"},
-  {start:"2026-05-08", end:"2026-05-10", label:"WK Surf", type:"perso"},
-  {start:"2026-05-14", label:"Férié — Ascension", type:"ferie"},
-  {start:"2026-05-25", label:"Férié — Pentecôte", type:"ferie"},
-  {start:"2026-06-06", label:"Gala Tina", type:"perso"},
-  {start:"2026-06-23", end:"2026-06-28", label:"Escalade", type:"perso"},
-  {start:"2026-07-04", label:"Théâtre Nico", type:"perso"},
-  {start:"2026-07-05", label:"Vide-maison maman", type:"perso"},
-  {start:"2026-07-14", label:"Férié — 14 juillet", type:"ferie"},
-  {start:"2026-07-27", label:"🎯 Rendu mémoire (objectif)", type:"deadline"},
-  {start:"2026-08-05", end:"2026-08-08", label:"Vacances (sans révision)", type:"perso"},
-  {start:"2026-08-09", end:"2026-08-12", label:"Révisions exams", type:"revision"},
-  {start:"2026-08-31", label:"⏳ Limite dépôt mémoire", type:"deadline"},
-  {start:"2026-10-28", label:"Examen Droit — UE1", type:"exam"},
-  {start:"2026-10-29", label:"Examens MSI (UE5) & MCG (UE3)", type:"exam"},
-  {start:"2026-11-02", label:"Soutenance mémoire", type:"exam"}
-];
+    // Heures dispo (stats)
+    var mEnd=calY+"-"+String(calM+1).padStart(2,"0")+"-"+String(nb).padStart(2,"0");
+    var mStart=calY+"-"+String(calM+1).padStart(2,"0")+"-01";
+    set("planStats",
+      stat(fr(hoursBetween(todayISO(),MEMO_TARGET))+' h','Dispo → 27/07 (rendu)')
+      +stat(fr(hoursBetween(todayISO(),MEMO_LIMIT))+' h','Dispo → 31/08 (limite)')
+      +stat(daysAvailBetween(todayISO(),MEMO_LIMIT)+'','Jours dispo restants')
+      +stat(fr(hoursBetween(mStart,mEnd))+' h','Total ce mois-ci'));
 
-/* =========================================================
-   4) NOTATION — simulateur /20 (feuille "Notation")
-   Note /10 = moyenne des niveaux notés × 10.
-   Écrit = forme + fond  ·  Soutenance = 4 critères.
-   Globale = écrit + soutenance.
-   État actuel de la feuille : 6,2 (écrit) + 6,0 (soutenance) = 12,2/20.
-   ========================================================= */
-var NOTE_LEVELS = [
-  {v:0,   label:"—"},
-  {v:0.2, label:"Très insuffisant"},
-  {v:0.4, label:"Insuffisant"},
-  {v:0.6, label:"Satisfaisant"},
-  {v:0.8, label:"Bien"},
-  {v:1.0, label:"Très bien"}
-];
+    // Événements du mois
+    set("evTitle", "Événements — "+MOIS[calM]);
+    var evs=EVENTS.filter(function(e){var s=e.start,en=e.end||e.start;return (s>=mStart&&s<=mEnd)||(en>=mStart&&en<=mEnd)||(s<mStart&&en>mEnd);}).sort(function(a,b){return a.start<b.start?-1:1;});
+    set("evList", evs.length?evs.map(function(e){
+      var dt=e.end?(ddmm(e.start)+"–"+ddmm(e.end)):ddmm(e.start);
+      return '<div class="ev-row"><span class="ev-date">'+dt+'</span><span class="ev-name">'+esc(e.label)+'</span><span class="ev-pill '+e.type+'">'+pillLabel(e.type)+'</span></div>';
+    }).join(""):'<p class="muted" style="margin:0">Aucun événement ce mois-ci.</p>');
+  }
+  function calShift(n){var d=new Date(calY,calM+n,1);calY=d.getFullYear();calM=d.getMonth();renderPlanning();}
 
-var NOTE_CRITERIA = {
-  forme: [
-    {id:"f1", label:"Respect des normes de communication (bibliographie APA, sommaire & table paginés)", level:0.8},
-    {id:"f2", label:"Qualité de la présentation écrite (lisibilité, illustrations, structure, annexes)", level:0.8},
-    {id:"f3", label:"Qualité de l'expression écrite (orthographe, syntaxe, clarté)", level:0.8}
-  ],
-  fond: [
-    {id:"d1", label:"Présentation des missions réalisées dans la structure d'accueil", level:0},
-    {id:"d2", label:"Traitement du sujet", level:0.8},
-    {id:"d3", label:"Formuler une problématique pertinente", level:0.6},
-    {id:"d4", label:"Choisir des références bibliographiques pertinentes", level:0.4},
-    {id:"d5", label:"Méthodologie & qualité de l'approche scientifique", level:0.6},
-    {id:"d6", label:"Analyser les résultats au regard de la problématique", level:0.4},
-    {id:"d7", label:"Capacité de synthèse — limites & prolongements", level:0.4},
-    {id:"d8", label:"Mettre en avant les apports managériaux", level:0.6}
-  ],
-  soutenance: [
-    {id:"s1", label:"Construire un exposé & mettre en valeur le travail", level:0.6},
-    {id:"s2", label:"S'exprimer à l'oral (aisance, fluidité, niveau de langage)", level:0.6},
-    {id:"s3", label:"Écouter & comprendre les questions du jury", level:0.6},
-    {id:"s4", label:"Apporter des réponses pertinentes aux questions", level:0.6}
-  ]
-};
+  /* ---------------- Rendu : Note ---------------- */
+  var LVL_SHORT={"0.2":"TI","0.4":"I","0.6":"S","0.8":"B","1":"TB"};
+  function lvlLabel(v){var f=NOTE_LEVELS.filter(function(l){return l.v===v;})[0];return f?f.label:"—";}
+  function renderNote(){
+    var ec=noteEcrit(), so=noteSout(), gl=noteGlobal();
+    var elim=gl<DSCG_RULES.eliminatoire, pass=gl>=DSCG_RULES.moyenne;
+    set("noteOut",
+      '<div class="note-out"><div class="note-box"><div class="v">'+fr(ec,1)+'<small>/10</small></div><div class="k">Écrit (forme + fond)</div></div>'
+      +'<div class="note-box alt"><div class="v">'+fr(so,1)+'<small>/10</small></div><div class="k">Soutenance</div></div></div>'
+      +'<div class="note-global '+(pass?'pass':'fail')+'"><div class="v">'+fr(gl,1)+'<small>/20</small></div>'
+      +'<div class="k">'+(elim?'⚠ Sous le seuil éliminatoire (6/20)':pass?'Au-dessus de la moyenne (10/20) ✓':'Sous la moyenne (10/20) — à remonter')+'</div></div>');
+    renderCrit("critForme", NOTE_CRITERIA.forme);
+    renderCrit("critFond", NOTE_CRITERIA.fond);
+    renderCrit("critSout", NOTE_CRITERIA.soutenance);
+  }
+  function renderCrit(host, list){
+    set(host, list.map(function(c){
+      var cur=state.note[c.id]||0;
+      var segs=NOTE_LEVELS.filter(function(l){return l.v>0;}).map(function(l){
+        var on=Math.abs(cur-l.v)<1e-9;
+        return '<button class="seg-btn'+(on?' on':'')+'" data-crit="'+c.id+'" data-lvl="'+l.v+'">'+(LVL_SHORT[(""+l.v)]||l.v)+'</button>';
+      }).join("");
+      var cap=cur>0?('Niveau : <b>'+esc(lvlLabel(cur))+'</b>'):'<i>Non noté — touche un niveau (re-touche pour effacer)</i>';
+      return '<div class="crit"><div class="crit-name">'+esc(c.label)+'</div><div class="seg">'+segs+'</div><div class="seg-cap">'+cap+'</div></div>';
+    }).join(""));
+  }
+
+  /* ---------------- Bilan à copier ---------------- */
+  function buildBilan(){
+    var ov=memoOverall(), pg=pagesTotals(), ng=noteGlobal();
+    var L=[];
+    L.push("SUIVI MÉMOIRE & RÉVISIONS DSCG — "+fmtFR(todayISO()));
+    L.push("");
+    L.push("MÉMOIRE : "+fr(ov,1)+"% global");
+    L.push("• Rendu 27/07 : J-"+daysUntil(MEMO_TARGET)+" · Limite 31/08 : J-"+daysUntil(MEMO_LIMIT));
+    L.push("• Pages rédigées : "+fr(pg.done,0)+"/"+pg.target);
+    L.push("• Note projetée : "+fr(ng,1)+"/20 (écrit "+fr(noteEcrit(),1)+" + soutenance "+fr(noteSout(),1)+")");
+    var todo=MEMO_PARTS.filter(function(p){return partPct(p.id)<100;});
+    if(todo.length){
+      L.push("• Parties à finir :");
+      todo.forEach(function(p){L.push("   - "+p.name.replace(/\s+/g," ")+" : "+partPct(p.id)+"%");});
+    }
+    var cr=CORRECTIONS.filter(function(c,i){return !state.corr[i];});
+    L.push("• Corrections restantes : "+cr.length+"/"+CORRECTIONS.length);
+    cr.forEach(function(c){L.push("   - "+c);});
+    L.push("");
+    L.push("EXAMENS (oct.) : J-"+daysUntil(EXAMS[0].date));
+    EXAMS.forEach(function(e){var r=state.rev[e.id]||[];L.push("• "+e.short+" "+e.code+" ("+ddmm(e.date)+") : "+r.filter(Boolean).length+"/"+r.length+" thèmes révisés");});
+    L.push("• Soutenance : "+fmtFR(MEMO_EXAM.date));
+    L.push("");
+    L.push("PLANNING : "+fr(hoursBetween(todayISO(),MEMO_LIMIT))+" h dispo d'ici le 31/08 sur "+daysAvailBetween(todayISO(),MEMO_LIMIT)+" jours.");
+    return L.join("\n");
+  }
+  function renderBilan(){var el=gId("bilanText");if(el)el.value=buildBilan();}
+
+  /* ---------------- Rendu global ---------------- */
+  function renderAll(){renderHdr();renderHome();renderMemo();renderExams();renderPlanning();renderNote();renderBilan();}
+
+  /* ---------------- Interactions : état ---------------- */
+  function stepPart(id,dir){if(!(id in state.parts))return;state.parts[id]=clamp(state.parts[id]+dir*10);save();renderAll();}
+  function toggleCorr(i){state.corr[i]=!state.corr[i];save();renderAll();}
+  function toggleRev(ue,i){if(!state.rev[ue])return;state.rev[ue][i]=!state.rev[ue][i];save();renderAll();}
+  function setLevel(id,v){state.note[id]=(Math.abs((state.note[id]||0)-v)<1e-9)?0:v;save();renderAll();}
+
+  /* ---------------- Export / Import / Reset ---------------- */
+  function exportData(){
+    try{
+      var blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+      var url=URL.createObjectURL(blob), a=document.createElement("a");
+      a.href=url;a.download="memoire-dscg-"+todayISO()+".json";document.body.appendChild(a);a.click();
+      setTimeout(function(){URL.revokeObjectURL(url);a.remove();},100);
+    }catch(e){alert("Export impossible sur ce navigateur.");}
+  }
+  function importData(file){
+    var fr2=new FileReader();
+    fr2.onload=function(){try{state=mergeState(JSON.parse(fr2.result));save();renderAll();alert("Données importées ✅");}catch(e){alert("Fichier invalide.");}};
+    fr2.readAsText(file);
+  }
+  function resetData(){
+    if(!confirm("Réinitialiser toutes tes saisies avec les valeurs de la feuille ? (corrections, révisions et curseurs reviennent à l'état de départ)"))return;
+    state=seedState();save();renderAll();
+  }
+
+  /* ---------------- Menu lanceur d'apps ---------------- */
+  function renderApps(){
+    var host=gId("appList");if(!host||typeof APPS==="undefined")return;
+    host.innerHTML=APPS.map(function(a){
+      var ic='<span class="app-ic">'+esc(a.icon||(a.name||"?").charAt(0))+'</span>';
+      var nm='<span class="app-name">'+esc(a.name)+'</span>';
+      if(a.here)return '<div class="app-item here">'+ic+nm+'</div>';
+      if(a.ready&&a.url)return '<a class="app-item" href="'+esc(a.url)+'">'+ic+nm+'<span class="app-arrow">›</span></a>';
+      return '<div class="app-item soon">'+ic+nm+'<span class="app-badge">bientôt</span></div>';
+    }).join("");
+  }
+  function openDrawer(){var d=gId("drawer"),bg=gId("drawerBg"),b=gId("menuBtn");if(!d||!bg)return;bg.hidden=false;d.hidden=false;requestAnimationFrame(function(){bg.classList.add("open");d.classList.add("open");});if(b)b.setAttribute("aria-expanded","true");}
+  function closeDrawer(){var d=gId("drawer"),bg=gId("drawerBg"),b=gId("menuBtn");if(!d||!bg)return;bg.classList.remove("open");d.classList.remove("open");if(b)b.setAttribute("aria-expanded","false");setTimeout(function(){bg.hidden=true;d.hidden=true;},240);}
+
+  /* ---------------- Onglets ---------------- */
+  function activateTab(view){
+    document.querySelectorAll(".view").forEach(function(v){v.classList.toggle("active",v.id===view);});
+    document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t.getAttribute("data-view")===view);});
+    window.scrollTo(0,0);
+  }
+
+  /* ---------------- Initialisation ---------------- */
+  function init(){
+    if(!STORAGE_OK){var wb=gId("warnbar");if(wb)wb.hidden=false;}
+    renderApps();
+    var mb=gId("menuBtn");if(mb)mb.addEventListener("click",openDrawer);
+    var dcl=gId("drawerClose");if(dcl)dcl.addEventListener("click",closeDrawer);
+    var dbg=gId("drawerBg");if(dbg)dbg.addEventListener("click",closeDrawer);
+    document.addEventListener("keydown",function(e){if(e.key==="Escape")closeDrawer();});
+    document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){activateTab(t.getAttribute("data-view"));});});
+
+    var cp=gId("calPrev"),cn=gId("calNext");
+    if(cp)cp.addEventListener("click",function(){calShift(-1);});
+    if(cn)cn.addEventListener("click",function(){calShift(1);});
+
+    var be=gId("btnExport");if(be)be.addEventListener("click",exportData);
+    var fi=gId("fileImport");if(fi)fi.addEventListener("change",function(){if(this.files&&this.files[0])importData(this.files[0]);this.value="";});
+    var br=gId("btnReset");if(br)br.addEventListener("click",resetData);
+    var bc=gId("bilanCopy");if(bc)bc.addEventListener("click",function(){
+      var ta=gId("bilanText");if(!ta)return;
+      function done(){bc.textContent="Copié ✅";setTimeout(function(){bc.textContent="Copier le bilan";},1600);}
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(ta.value).then(done).catch(function(){ta.select();try{document.execCommand("copy");}catch(e){}done();});}
+      else{ta.select();try{document.execCommand("copy");}catch(e){}done();}
+    });
+
+    // Délégation : steppers, segments, cases à cocher
+    var main=document.querySelector("main");
+    if(main){
+      main.addEventListener("click",function(e){
+        var s=e.target.closest&&e.target.closest(".step-btn");if(s){stepPart(s.getAttribute("data-part"),parseInt(s.getAttribute("data-dir"),10));return;}
+        var g=e.target.closest&&e.target.closest(".seg-btn");if(g){setLevel(g.getAttribute("data-crit"),parseFloat(g.getAttribute("data-lvl")));return;}
+      });
+      main.addEventListener("change",function(e){
+        var t=e.target;
+        if(t.matches&&t.matches("input[data-corr]")){toggleCorr(parseInt(t.getAttribute("data-corr"),10));return;}
+        if(t.matches&&t.matches("input[data-ue]")){toggleRev(t.getAttribute("data-ue"),parseInt(t.getAttribute("data-idx"),10));return;}
+      });
+    }
+
+    renderAll();
+  }
+
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+
+})();
