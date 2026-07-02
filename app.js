@@ -44,6 +44,15 @@
   function getDayState(iso){return normType(pCache.states[iso]||"");}
   function setDayState(iso,st){st=normType(st);pMutate(function(s){if(st)s.states[iso]=st;else delete s.states[iso];});}
 
+  /* Étape B : échéances communes (lecture seule — l'édition vit côté Coach Muscu).
+     Tri par date, passées filtrées, tombstones (removed) respectés. */
+  function pDeadlines(){
+    var t=todayISO();
+    return pCache.deadlines.filter(function(d){
+      return d&&d.date&&d.date>=t&&!(d.id&&pCache.removed[d.id]);
+    }).sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+  }
+
   /* Semis one-shot des exceptions DSCG (garde seeds.dscgExc) — n'écrase jamais l'existant */
   function seedShared(){
     if(pLoadFresh().seeds.dscgExc)return;
@@ -60,7 +69,7 @@
 
   /* ---------------- État (valeurs de la feuille + saisies) ---------------- */
   function seedState(){
-    var st={parts:{}, corr:[], rev:{}, note:{}};
+    var st={parts:{}, corr:[], rev:{}, note:{}, done:{}};
     MEMO_PARTS.forEach(function(p){st.parts[p.id]=p.pct;});
     CORRECTIONS.forEach(function(){st.corr.push(false);});
     Object.keys(EXAM_REVISIONS).forEach(function(ue){st.rev[ue]=EXAM_REVISIONS[ue].map(function(){return false;});});
@@ -74,6 +83,7 @@
     if(Array.isArray(saved.corr))st.corr=st.corr.map(function(v,i){return !!saved.corr[i];});
     if(saved.rev)for(var ue in st.rev)if(Array.isArray(saved.rev[ue]))st.rev[ue]=st.rev[ue].map(function(v,i){return !!saved.rev[ue][i];});
     if(saved.note)for(var cid in st.note)if(typeof saved.note[cid]==="number")st.note[cid]=saved.note[cid];
+    if(saved.done&&typeof saved.done==="object")for(var dk in saved.done){var dv=saved.done[dk];if(typeof dv==="number"&&isFinite(dv)&&dv>=0&&/^\d{4}-\d{2}-\d{2}$/.test(dk))st.done[dk]=dv;}
     return st;
   }
   var state = mergeState(rawLoad());
@@ -185,11 +195,19 @@
         +'<div class="hf"><div class="v">'+fr(hoursBetween(todayISO(),MEMO_LIMIT))+' h</div><div class="k">Dispo → 31/08</div></div>'
       +'</div></div>');
 
-    // Prochaines échéances : événements futurs
-    var up=EVENTS.filter(function(e){return daysUntil(e.start)>=0;}).sort(function(a,b){return a.start<b.start?-1:1;}).slice(0,6);
-    set("upNext", up.length?up.map(function(e){
-      var d=daysUntil(e.start);
-      return '<div class="ev-row"><span class="ev-date">J-'+d+'</span><span class="ev-name">'+esc(e.label)+'</span><span class="ev-pill '+e.type+'">'+pillLabel(e.type)+'</span></div>';
+    // Étape B : échéances communes (store partagé) + événements locaux à venir.
+    // Si le store contient des échéances, il fait foi → on masque les doublons locaux (deadline/exam).
+    var dls=pDeadlines();
+    var rows=dls.map(function(dd){return {date:dd.date,label:(dd.icon?dd.icon+" ":"")+dd.label,type:"deadline"};})
+      .concat(EVENTS.filter(function(e){
+        if(daysUntil(e.start)<0)return false;
+        if(dls.length&&(e.type==="deadline"||e.type==="exam"))return false;
+        return true;
+      }).map(function(e){return {date:e.start,label:e.label,type:e.type};}))
+      .sort(function(a,b){return a.date<b.date?-1:1;}).slice(0,8);
+    set("upNext", rows.length?rows.map(function(r){
+      var j=daysUntil(r.date);
+      return '<div class="ev-row"><span class="ev-date">J-'+j+'</span><span class="ev-name">'+esc(r.label)+'</span><span class="ev-pill '+r.type+'">'+pillLabel(r.type)+'</span></div>';
     }).join(""):'<p class="muted" style="margin:0">Plus d\'échéance à venir 🎉</p>');
 
     var ng=noteGlobal();
@@ -201,6 +219,30 @@
   }
   function stat(v,k){return '<div class="stat"><div class="v">'+v+'</div><div class="k">'+esc(k)+'</div></div>';}
   function pillLabel(t){return {ferie:"Férié",perso:"Perso",deadline:"Échéance",exam:"Examen",revision:"Révisions"}[t]||t;}
+
+  /* ---------------- Étape D : journal "révisé aujourd'hui" (local, hors PKEY) ---------------- */
+  var DONE_CHOICES=[0,0.5,1,1.5,2,3,4,6];
+  function doneToday(){var v=state.done[todayISO()];return typeof v==="number"?v:null;}
+  function setDone(h){var k=todayISO();if(h==null)delete state.done[k];else state.done[k]=h;save();renderAll();}
+  function weekBounds(){var t=parseISO(todayISO()),wd=(t.getDay()+6)%7,m=new Date(t);m.setDate(t.getDate()-wd);return{a:isoOf(m),b:todayISO()};}
+  function renderToday(){
+    var cur=doneToday(), plan=dayHours(todayISO());
+    var chips=DONE_CHOICES.map(function(h){
+      var on=(cur!==null&&Math.abs(cur-h)<1e-9);
+      return '<button class="seg-btn'+(on?' on':'')+'" data-done="'+h+'">'+(h%1===0?h:fr(h,1))+'</button>';
+    }).join("");
+    var wb=weekBounds(), real=0, realW=0, n=0;
+    for(var k in state.done){real+=state.done[k];n++;if(k>=wb.a&&k<=wb.b)realW+=state.done[k];}
+    var planW=hoursBetween(wb.a,wb.b);
+    set("todaySub","— "+fmtFR(todayISO())+" · prévu "+frH(plan));
+    set("todayLog",
+      '<div class="seg wrap">'+chips+'</div>'
+      +'<div class="seg-cap">'+(cur===null?'<i>Non saisi — touche tes heures réelles (re-touche pour effacer)</i>':'Saisi : <b>'+frH(cur)+'</b>')+'</div>'
+      +'<div class="stat-grid" style="margin-top:12px">'
+        +stat(frH(realW)+'<span style="font-size:13px;color:var(--muted)"> / '+frH(planW)+'</span>','Réel / prévu cette semaine')
+        +stat(frH(real),'Total saisi · '+n+' j')
+      +'</div>');
+  }
 
   /* ---------------- Rendu : Mémoire ---------------- */
   function renderMemo(){
@@ -368,12 +410,14 @@
     L.push("• Soutenance : "+fmtFR(MEMO_EXAM.date));
     L.push("");
     L.push("PLANNING : "+fr(hoursBetween(todayISO(),MEMO_LIMIT))+" h dispo d'ici le 31/08 sur "+daysAvailBetween(todayISO(),MEMO_LIMIT)+" jours.");
+    var _r=0,_n=0;for(var _k in state.done){_r+=state.done[_k];_n++;}
+    if(_n)L.push("• Heures réellement saisies : "+frH(_r)+" sur "+_n+" j");
     return L.join("\n");
   }
   function renderBilan(){var el=gId("bilanText");if(el)el.value=buildBilan();}
 
   /* ---------------- Rendu global ---------------- */
-  function renderAll(){renderHdr();renderHome();renderMemo();renderExams();renderPlanning();renderNote();renderBilan();}
+  function renderAll(){renderHdr();renderHome();renderToday();renderMemo();renderExams();renderPlanning();renderNote();renderBilan();}
 
   /* ---------------- Interactions : état ---------------- */
   function stepPart(id,dir){if(!(id in state.parts))return;state.parts[id]=clamp(state.parts[id]+dir*10);save();renderAll();}
@@ -396,9 +440,9 @@
     fr2.readAsText(file);
   }
   function resetData(){
-    if(!confirm("Réinitialiser toutes tes saisies avec les valeurs de la feuille ? (corrections, révisions et curseurs reviennent à l'état de départ)"))return;
-    // NB : ne touche volontairement PAS au store partagé PKEY (calendrier commun avec Coach Muscu).
-    state=seedState();save();renderAll();
+    if(!confirm("Réinitialiser toutes tes saisies avec les valeurs de la feuille ? (corrections, révisions et curseurs reviennent à l'état de départ ; le journal d'heures est conservé)"))return;
+    // NB : ne touche volontairement PAS au store partagé PKEY, ni au journal d'heures (state.done).
+    var keepDone=state.done;state=seedState();state.done=keepDone;save();renderAll();
   }
 
   /* ---------------- Étape A : édition du type de jour (bottom-sheet) ---------------- */
@@ -486,7 +530,9 @@
     if(main){
       main.addEventListener("click",function(e){
         var s=e.target.closest&&e.target.closest(".step-btn");if(s){stepPart(s.getAttribute("data-part"),parseInt(s.getAttribute("data-dir"),10));return;}
-        var g=e.target.closest&&e.target.closest(".seg-btn");if(g){setLevel(g.getAttribute("data-crit"),parseFloat(g.getAttribute("data-lvl")));return;}
+        var dn=e.target.closest&&e.target.closest(".seg-btn[data-done]");
+        if(dn){var dh=parseFloat(dn.getAttribute("data-done")),dc=doneToday();setDone((dc!==null&&Math.abs(dc-dh)<1e-9)?null:dh);return;}
+        var g=e.target.closest&&e.target.closest(".seg-btn[data-crit]");if(g){setLevel(g.getAttribute("data-crit"),parseFloat(g.getAttribute("data-lvl")));return;}
       });
       main.addEventListener("change",function(e){
         var t=e.target;
