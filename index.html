@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Mémoire DSCG">
   <title>Suivi mémoire & révisions — DSCG</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 
@@ -89,10 +89,13 @@
         </div>
         <div class="cal-dow"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
         <div class="cal-grid" id="calGrid"></div>
+        <p class="muted" style="margin:10px 2px 0;font-size:12px">Touche un jour pour changer son type — calendrier partagé avec Coach Muscu.</p>
         <div class="cal-legend">
           <span><i class="semaine"></i>Semaine · 0,5 h</span>
           <span><i class="weekend"></i>Week-end · 6 h</span>
+          <span><i class="cours"></i>Cours · 0,5 h</span>
           <span><i class="conge"></i>Congé · 6 h</span>
+          <span><i class="repos"></i>Repos</span>
           <span><i class="indispo"></i>Indispo · 0 h</span>
           <span><i class="common"></i>Jour commun Tina</span>
           <span><i class="ev"></i>Événement</span>
@@ -147,6 +150,16 @@
 
   </main>
 
+  <!-- Bottom-sheet : édition du type de jour (calendrier partagé) -->
+  <div class="sheet-bg" id="sheetBg" hidden></div>
+  <div class="sheet" id="daySheet" hidden role="dialog" aria-label="Type de jour">
+    <div class="sheet-head">
+      <span class="sheet-title" id="sheetTitle"></span>
+      <button class="sheet-close" id="sheetClose" aria-label="Fermer">&times;</button>
+    </div>
+    <div id="sheetOpts"></div>
+  </div>
+
   <!-- ====================== NAVIGATION ====================== -->
   <nav class="tabs">
     <button class="tab on" data-view="v-home">
@@ -164,7 +177,7 @@
   <!-- ====================== SCRIPTS ======================
        data.js (données : APPS, MEMO_PARTS, EXAMS, EVENTS, NOTE_CRITERIA…)
        doit être chargé AVANT app.js (logique, rendu, stockage). -->
-  <script src="data.js?v=1"></script>
-  <script src="app.js?v=1"></script>
+  <script src="data.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
