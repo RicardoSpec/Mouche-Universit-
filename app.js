@@ -16,6 +16,48 @@
   function rawLoad(){if(!STORAGE_OK)return memStore;try{var r=localStorage.getItem(KEY);return r?JSON.parse(r):null;}catch(e){return null;}}
   function save(){try{var s=JSON.stringify(state);if(STORAGE_OK)localStorage.setItem(KEY,s);else memStore=s;}catch(e){}}
 
+  /* ---------------- Store PARTAGÉ (calendrier commun avec Coach Muscu) ----------------
+     Même origine github.io ⇒ même localStorage. RÈGLE ANTI-CLOBBER : toute
+     écriture passe par pMutate(fn), qui relit le store FRAIS depuis le disque
+     puis ne modifie QUE l'entrée visée (upsert par clé/id). Jamais d'écrasement
+     global : Coach Muscu écrit aussi dedans. resetData() n'y touche JAMAIS. */
+  var PKEY = "ricardospec_planning_v1";
+  var pMem = null; // repli mémoire si localStorage indisponible
+  function pNorm(s){ // garantit le squelette SANS perdre les clés inconnues (autre app)
+    s=(s&&typeof s==="object")?s:{};
+    if(!s.states||typeof s.states!=="object")s.states={};
+    if(!Array.isArray(s.events))s.events=[];
+    if(!Array.isArray(s.deadlines))s.deadlines=[];
+    if(!s.removed||typeof s.removed!=="object")s.removed={};
+    if(!s.seeds||typeof s.seeds!=="object")s.seeds={};
+    return s;
+  }
+  function pLoadFresh(){var r=null;try{r=STORAGE_OK?localStorage.getItem(PKEY):pMem;}catch(e){}var s=null;try{s=r?JSON.parse(r):null;}catch(e){}return pNorm(s);}
+  var pCache = pNorm(null);
+  function pRefresh(){pCache=pLoadFresh();}
+  function pMutate(fn){var s=pLoadFresh();fn(s);s.rev=Date.now();try{var j=JSON.stringify(s);if(STORAGE_OK)localStorage.setItem(PKEY,j);else pMem=j;}catch(e){}pCache=s;}
+
+  /* Vocabulaire commun des types de jour (+ migration héritée) */
+  var ST_MAP={"occupé":"indispo","occupe":"indispo","vacances":"conge","congé":"conge"};
+  var ST_OK={cours:1,conge:1,repos:1,indispo:1};
+  function normType(t){t=ST_MAP[t]||t;return ST_OK[t]?t:"";}
+  function getDayState(iso){return normType(pCache.states[iso]||"");}
+  function setDayState(iso,st){st=normType(st);pMutate(function(s){if(st)s.states[iso]=st;else delete s.states[iso];});}
+
+  /* Semis one-shot des exceptions DSCG (garde seeds.dscgExc) — n'écrase jamais l'existant */
+  function seedShared(){
+    if(pLoadFresh().seeds.dscgExc)return;
+    pMutate(function(s){
+      if(s.seeds.dscgExc)return;
+      for(var iso in DAY_EXCEPTIONS){
+        if(s.states[iso])continue; // priorité absolue à ce que le store contient déjà
+        var st=normType(DAY_EXCEPTIONS[iso]); // congé→conge · indispo→indispo
+        if(st)s.states[iso]=st;
+      }
+      s.seeds.dscgExc=true;
+    });
+  }
+
   /* ---------------- État (valeurs de la feuille + saisies) ---------------- */
   function seedState(){
     var st={parts:{}, corr:[], rev:{}, note:{}};
@@ -64,8 +106,15 @@
   function corrDone(){return state.corr.filter(Boolean).length;}
 
   /* ---------------- Calculs : calendrier ---------------- */
-  function dayType(iso){if(DAY_EXCEPTIONS[iso])return DAY_EXCEPTIONS[iso];var wd=parseISO(iso).getDay();return (wd===0||wd===6)?"weekend":"semaine";}
-  function dayHours(iso){return HOURS[dayType(iso)]||0;}
+  function baseType(iso){var wd=parseISO(iso).getDay();return (wd===0||wd===6)?"weekend":"semaine";}
+  function dayType(iso){return getDayState(iso)||baseType(iso);} /* semaine|weekend|cours|conge|repos|indispo */
+  function dayHours(iso){
+    var st=getDayState(iso);
+    if(st==="indispo")return 0;
+    if(st==="cours")return 0.5;
+    if(st==="conge")return 6;
+    return HOURS[baseType(iso)]||0; /* repos & normal → base du jour */
+  }
   function hoursBetween(a,b){if(parseISO(b)<parseISO(a))return 0;var s=0;eachDay(a,b,function(iso){s+=dayHours(iso);});return s;}
   function daysAvailBetween(a,b){if(parseISO(b)<parseISO(a))return 0;var n=0;eachDay(a,b,function(iso){if(dayHours(iso)>0)n++;});return n;}
   function isCommon(iso){return COMMON_DAYS.indexOf(iso)>=0;}
@@ -231,7 +280,7 @@
   }
 
   /* ---------------- Rendu : Planning ---------------- */
-  var calY=2026, calM=5; // juin 2026 par défaut (mois 0-indexé)
+  var _n=new Date(), calY=_n.getFullYear(), calM=_n.getMonth(); // ouvre sur le mois courant
   function renderPlanning(){
     var first=new Date(calY,calM,1), nb=new Date(calY,calM+1,0).getDate();
     var off=(first.getDay()+6)%7; // lundi = 0
@@ -241,9 +290,9 @@
     for(var day=1;day<=nb;day++){
       var iso=calY+"-"+String(calM+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");
       var t=dayType(iso), h=dayHours(iso);
-      var cls="cal-cell "+(t==="congé"?"conge":t)+(iso===todayISO()?" today":"");
+      var cls="cal-cell "+t+(iso===todayISO()?" today":"");
       var ev=EVENTS.some(function(e){return iso>=e.start&&iso<=(e.end||e.start);});
-      cells+='<div class="'+cls+'"><div class="d">'+day+'</div><div class="h">'+(h%1===0?h:fr(h,1))+'h</div>'
+      cells+='<div class="'+cls+'" data-iso="'+iso+'" role="button" aria-label="'+fmtFR(iso)+'"><div class="d">'+day+'</div><div class="h">'+(h%1===0?h:fr(h,1))+'h</div>'
         +(isCommon(iso)?'<span class="dot" title="Jour commun Tina"></span>':'')
         +(ev?'<span class="ev"></span>':'')+'</div>';
     }
@@ -348,7 +397,43 @@
   }
   function resetData(){
     if(!confirm("Réinitialiser toutes tes saisies avec les valeurs de la feuille ? (corrections, révisions et curseurs reviennent à l'état de départ)"))return;
+    // NB : ne touche volontairement PAS au store partagé PKEY (calendrier commun avec Coach Muscu).
     state=seedState();save();renderAll();
+  }
+
+  /* ---------------- Étape A : édition du type de jour (bottom-sheet) ---------------- */
+  var DAY_TYPES=[
+    {id:"",        label:"Normal",           ic:"—"},
+    {id:"cours",   label:"Cours / travail",  ic:"📚"},
+    {id:"conge",   label:"Congé",            ic:"🏖️"},
+    {id:"repos",   label:"Repos",            ic:"😴", note:"sport bloqué"},
+    {id:"indispo", label:"Indisponible",     ic:"🚫", note:"sport bloqué"}
+  ];
+  var sheetIso=null;
+  function typeHours(iso,id){
+    if(id==="indispo")return "0 h";
+    if(id==="cours")return "0,5 h";
+    if(id==="conge")return "6 h";
+    return frH(HOURS[baseType(iso)]||0); /* Normal / Repos → base du jour */
+  }
+  function openDaySheet(iso){
+    sheetIso=iso;
+    var cur=getDayState(iso);
+    set("sheetTitle", fmtFR(iso));
+    set("sheetOpts", DAY_TYPES.map(function(t){
+      var on=(cur===t.id);
+      return '<button class="sh-opt'+(on?' on':'')+'" data-type="'+t.id+'">'
+        +'<span class="sh-ic">'+t.ic+'</span><span class="sh-lb">'+esc(t.label)+'</span>'
+        +'<span class="sh-h">'+typeHours(iso,t.id)+(t.note?' · '+t.note:'')+'</span></button>';
+    }).join(""));
+    var bg=gId("sheetBg"),sh=gId("daySheet");if(!bg||!sh)return;
+    bg.hidden=false;sh.hidden=false;
+    requestAnimationFrame(function(){bg.classList.add("open");sh.classList.add("open");});
+  }
+  function closeDaySheet(){
+    var bg=gId("sheetBg"),sh=gId("daySheet");if(!bg||!sh||sh.hidden)return;
+    bg.classList.remove("open");sh.classList.remove("open");sheetIso=null;
+    setTimeout(function(){bg.hidden=true;sh.hidden=true;},220);
   }
 
   /* ---------------- Menu lanceur d'apps ---------------- */
@@ -379,7 +464,7 @@
     var mb=gId("menuBtn");if(mb)mb.addEventListener("click",openDrawer);
     var dcl=gId("drawerClose");if(dcl)dcl.addEventListener("click",closeDrawer);
     var dbg=gId("drawerBg");if(dbg)dbg.addEventListener("click",closeDrawer);
-    document.addEventListener("keydown",function(e){if(e.key==="Escape")closeDrawer();});
+    document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeDrawer();closeDaySheet();}});
     document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){activateTab(t.getAttribute("data-view"));});});
 
     var cp=gId("calPrev"),cn=gId("calNext");
@@ -409,6 +494,29 @@
         if(t.matches&&t.matches("input[data-ue]")){toggleRev(t.getAttribute("data-ue"),parseInt(t.getAttribute("data-idx"),10));return;}
       });
     }
+
+    // Étape A : tap sur un jour → bottom-sheet type de jour
+    var grid=gId("calGrid");
+    if(grid)grid.addEventListener("click",function(e){
+      var c=e.target.closest&&e.target.closest(".cal-cell[data-iso]");
+      if(c)openDaySheet(c.getAttribute("data-iso"));
+    });
+    var shx=gId("sheetClose");if(shx)shx.addEventListener("click",closeDaySheet);
+    var shb=gId("sheetBg");if(shb)shb.addEventListener("click",closeDaySheet);
+    var sho=gId("sheetOpts");
+    if(sho)sho.addEventListener("click",function(e){
+      var b=e.target.closest&&e.target.closest(".sh-opt");
+      if(!b||sheetIso==null)return;
+      setDayState(sheetIso,b.getAttribute("data-type"));
+      closeDaySheet();
+      renderAll(); // Planning + Accueil (heures, stats, bilan) se recalculent
+    });
+
+    // Store partagé : semis one-shot + rafraîchissement quand Coach Muscu écrit
+    seedShared();pRefresh();
+    window.addEventListener("storage",function(e){if(e.key===PKEY){pRefresh();renderAll();}});
+    document.addEventListener("visibilitychange",function(){if(!document.hidden){pRefresh();renderAll();}});
+    window.addEventListener("focus",function(){pRefresh();renderAll();});
 
     renderAll();
   }
