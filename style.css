@@ -266,3 +266,30 @@ nav.tabs .tab.on{color:var(--primary)}
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms !important;transition-duration:.001ms !important}
 }
+
+/* ---------- v3 : types de jour du vocabulaire commun (Coach Muscu) ---------- */
+.cal-cell.cours{background:#e8f0fb;color:#2b5f9e}
+.cal-cell.cours .h{color:#5b83ad}
+.cal-cell.repos{background:#eef1f5;color:#5f6d7a}
+.cal-cell.repos .h{color:#8b98a4}
+.cal-legend i.cours{background:#e8f0fb}
+.cal-legend i.repos{background:#eef1f5}
+.cal-cell[data-iso]{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cal-cell[data-iso]:active{filter:brightness(.96)}
+
+/* ---------- v3 : bottom-sheet "type de jour" ---------- */
+.sheet-bg{position:fixed;inset:0;background:rgba(8,20,33,.5);z-index:70;opacity:0;transition:opacity .2s}
+.sheet-bg.open{opacity:1}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:71;background:#fff;border-radius:18px 18px 0 0;max-width:560px;margin:0 auto;box-shadow:0 -6px 30px rgba(0,0,0,.22);transform:translateY(105%);transition:transform .22s ease;padding:14px 16px calc(env(safe-area-inset-bottom) + 16px)}
+.sheet.open{transform:translateY(0)}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sheet-title{font-size:16px;font-weight:800;text-transform:capitalize}
+.sheet-close{border:none;background:transparent;font-size:26px;line-height:1;color:var(--muted);cursor:pointer;padding:0 6px}
+.sh-opt{display:flex;align-items:center;gap:11px;width:100%;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-size:14.5px;cursor:pointer;text-align:left}
+.sh-opt+.sh-opt{margin-top:7px}
+.sh-opt:active{background:#f3f6f9}
+.sh-opt.on{border-color:var(--primary);background:#eef4f8}
+.sh-ic{font-size:19px;width:26px;text-align:center;flex:none}
+.sh-lb{font-weight:700;flex:1;color:var(--ink)}
+.sh-h{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--muted);flex:none}
+.sh-opt.on .sh-h{color:var(--primary)}
