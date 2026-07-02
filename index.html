@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Mémoire DSCG">
   <title>Suivi mémoire & révisions — DSCG</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 
@@ -40,7 +40,11 @@
     <section class="view active" id="v-home">
       <div id="heroCard"></div>
       <div class="card pad">
-        <div class="sec-title">Prochaines échéances</div>
+        <div class="sec-title">Révisé aujourd'hui <span class="sub" id="todaySub"></span></div>
+        <div id="todayLog"></div>
+      </div>
+      <div class="card pad">
+        <div class="sec-title">Prochaines échéances <span class="sub">— échéances communes + agenda local</span></div>
         <div id="upNext"></div>
       </div>
       <div class="card pad">
@@ -177,7 +181,7 @@
   <!-- ====================== SCRIPTS ======================
        data.js (données : APPS, MEMO_PARTS, EXAMS, EVENTS, NOTE_CRITERIA…)
        doit être chargé AVANT app.js (logique, rendu, stockage). -->
-  <script src="data.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="data.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
