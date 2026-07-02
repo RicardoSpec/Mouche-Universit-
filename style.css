@@ -11,7 +11,7 @@
   --ink:#16242e;      --muted:#62717d;      --line:#e4e9ef;
   --bg:#eef2f6;       --card:#ffffff;       --none-bg:#eaeff4;
   --done-bg:#e2f3ea;  --done-line:#9bd6b3;  --done-ink:#1d7a46;
-  --conge-bg:#fdeee6; --conge-line:#f3c3a8; --conge-ink:#b5491f;
+  --conge-bg:#e7f4ea; --conge-line:#bfe3cb; --conge-ink:#2f6b41; /* aligné Coach Muscu */
   --danger:#c0392b;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
@@ -181,7 +181,7 @@ h2.page{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px 14px
 .cal-cell.semaine .h{color:var(--muted)}
 .cal-cell.weekend{background:var(--done-bg);color:var(--done-ink)}
 .cal-cell.conge{background:var(--conge-bg);color:var(--conge-ink)}
-.cal-cell.indispo{background:#eceef1;color:#aab4bd}
+.cal-cell.indispo{background:#fdecec;color:#a3352f}
 .cal-cell.indispo .h{opacity:.7}
 .cal-cell.today{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
 .cal-cell .dot{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:#2aa45f;box-shadow:0 0 0 1.5px #fff}
@@ -192,7 +192,7 @@ h2.page{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px 14px
 .cal-legend i.semaine{background:#f2f6fa}
 .cal-legend i.weekend{background:var(--done-bg)}
 .cal-legend i.conge{background:var(--conge-bg)}
-.cal-legend i.indispo{background:#eceef1}
+.cal-legend i.indispo{background:#fdecec}
 .cal-legend i.common{border-radius:50%;background:#2aa45f;width:10px;height:10px}
 .cal-legend i.ev{border-radius:50%;background:var(--accent);width:9px;height:9px}
 
@@ -268,10 +268,8 @@ nav.tabs .tab.on{color:var(--primary)}
 }
 
 /* ---------- v3 : types de jour du vocabulaire commun (Coach Muscu) ---------- */
-.cal-cell.cours{background:#e8f0fb;color:#2b5f9e}
-.cal-cell.cours .h{color:#5b83ad}
-.cal-cell.repos{background:#eef1f5;color:#5f6d7a}
-.cal-cell.repos .h{color:#8b98a4}
+.cal-cell.cours{background:#e8f0fb;color:#204a7a}
+.cal-cell.repos{background:#eef1f5;color:#5b6571}
 .cal-legend i.cours{background:#e8f0fb}
 .cal-legend i.repos{background:#eef1f5}
 .cal-cell[data-iso]{cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -293,3 +291,14 @@ nav.tabs .tab.on{color:var(--primary)}
 .sh-lb{font-weight:700;flex:1;color:var(--ink)}
 .sh-h{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--muted);flex:none}
 .sh-opt.on .sh-h{color:var(--primary)}
+
+/* ---------- v5 : sélecteur de type coloré comme Coach Muscu ---------- */
+.sh-opt.on .sh-lb,.sh-opt.on .sh-h{color:inherit}
+.sh-opt[data-type="cours"].on{border-color:#3b6fb0;background:#e8f0fb;color:#204a7a}
+.sh-opt[data-type="conge"].on{border-color:#4c9a63;background:#e7f4ea;color:#2f6b41}
+.sh-opt[data-type="repos"].on{border-color:#9aa3ad;background:#eef1f5;color:#5b6571}
+.sh-opt[data-type="indispo"].on{border-color:#d9534f;background:#fdecec;color:#a3352f}
+
+/* ---------- v6 : puces du journal "révisé aujourd'hui" ---------- */
+.seg.wrap{flex-wrap:wrap}
+.seg.wrap .seg-btn{flex:1 1 22%;min-width:54px}
