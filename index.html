@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Mémoire DSCG">
   <title>Suivi mémoire & révisions — DSCG</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -56,6 +56,12 @@
     <!-- ====================== MÉMOIRE ====================== -->
     <section class="view" id="v-memoire">
       <h2 class="page">Mémoire</h2>
+      <div class="memo-sticky" id="memoSticky" aria-hidden="true">
+        <div class="ms-in">
+          <div class="ms-row"><span class="ms-pct" id="msPct"></span><span class="ms-rest" id="msRest"></span></div>
+          <div class="ms-bar"><div class="ms-fill" id="msFill"></div></div>
+        </div>
+      </div>
       <div class="card pad">
         <div id="memoOverall"></div>
       </div>
@@ -63,9 +69,9 @@
         <div class="sec-title">Avancement par partie <span class="sub">— touche − / + (pas de 10 %)</span></div>
         <div id="memoParts"></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">Corrections à traiter <span class="sub" id="corrCount"></span></div>
-        <div id="corrections"></div>
+      <div class="card pad acc" id="accCorr">
+        <button class="acc-head" data-acc="corr" aria-expanded="false"><span class="acc-title">Corrections à traiter</span><span class="acc-sub push" id="corrCount"></span><span class="chev">›</span></button>
+        <div class="acc-body"><div id="corrections"></div></div>
       </div>
       <div class="card pad">
         <div class="sec-title">Progression dans le temps</div>
@@ -122,17 +128,17 @@
       <div class="card pad">
         <div id="noteOut"></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">Mémoire écrit — la forme</div>
-        <div id="critForme"></div>
+      <div class="card pad acc" id="accNoteForme">
+        <button class="acc-head" data-acc="note_forme" aria-expanded="false"><span class="acc-title">Mémoire écrit — la forme</span><span class="chev push">›</span></button>
+        <div class="acc-body"><div id="critForme"></div></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">Mémoire écrit — le fond</div>
-        <div id="critFond"></div>
+      <div class="card pad acc" id="accNoteFond">
+        <button class="acc-head" data-acc="note_fond" aria-expanded="false"><span class="acc-title">Mémoire écrit — le fond</span><span class="chev push">›</span></button>
+        <div class="acc-body"><div id="critFond"></div></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">Soutenance</div>
-        <div id="critSout"></div>
+      <div class="card pad acc" id="accNoteSout">
+        <button class="acc-head" data-acc="note_sout" aria-expanded="false"><span class="acc-title">Soutenance</span><span class="chev push">›</span></button>
+        <div class="acc-body"><div id="critSout"></div></div>
       </div>
 
       <div class="card pad">
@@ -181,7 +187,7 @@
   <!-- ====================== SCRIPTS ======================
        data.js (données : APPS, MEMO_PARTS, EXAMS, EVENTS, NOTE_CRITERIA…)
        doit être chargé AVANT app.js (logique, rendu, stockage). -->
-  <script src="data.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="data.js?v=9"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
