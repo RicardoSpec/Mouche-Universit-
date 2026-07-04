@@ -69,7 +69,7 @@
 
   /* ---------------- État (valeurs de la feuille + saisies) ---------------- */
   function seedState(){
-    var st={parts:{}, corr:[], rev:{}, note:{}, done:{}};
+    var st={parts:{}, corr:[], rev:{}, note:{}, done:{}, ui:{open:{}}};
     MEMO_PARTS.forEach(function(p){st.parts[p.id]=p.pct;});
     CORRECTIONS.forEach(function(){st.corr.push(false);});
     Object.keys(EXAM_REVISIONS).forEach(function(ue){st.rev[ue]=EXAM_REVISIONS[ue].map(function(){return false;});});
@@ -84,9 +84,11 @@
     if(saved.rev)for(var ue in st.rev)if(Array.isArray(saved.rev[ue]))st.rev[ue]=st.rev[ue].map(function(v,i){return !!saved.rev[ue][i];});
     if(saved.note)for(var cid in st.note)if(typeof saved.note[cid]==="number")st.note[cid]=saved.note[cid];
     if(saved.done&&typeof saved.done==="object")for(var dk in saved.done){var dv=saved.done[dk];if(typeof dv==="number"&&isFinite(dv)&&dv>=0&&/^\d{4}-\d{2}-\d{2}$/.test(dk))st.done[dk]=dv;}
+    if(saved.ui&&saved.ui.open&&typeof saved.ui.open==="object")for(var uk in saved.ui.open)st.ui.open[uk]=!!saved.ui.open[uk];
     return st;
   }
   var state = mergeState(rawLoad());
+  function isOpen(id){return !!(state.ui&&state.ui.open&&state.ui.open[id]);}
 
   /* ---------------- Dates ---------------- */
   var JJ=["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
@@ -221,23 +223,21 @@
   function pillLabel(t){return {ferie:"Férié",perso:"Perso",deadline:"Échéance",exam:"Examen",revision:"Révisions"}[t]||t;}
 
   /* ---------------- Étape D : journal "révisé aujourd'hui" (local, hors PKEY) ---------------- */
-  var DONE_CHOICES=[0,0.5,1,1.5,2,3,4,6];
+  var DONE_CHOICES=[0,0.5,1,1.5,2,2.5,3,3.5,4,5,6,8];
   function doneToday(){var v=state.done[todayISO()];return typeof v==="number"?v:null;}
   function setDone(h){var k=todayISO();if(h==null)delete state.done[k];else state.done[k]=h;save();renderAll();}
   function weekBounds(){var t=parseISO(todayISO()),wd=(t.getDay()+6)%7,m=new Date(t);m.setDate(t.getDate()-wd);return{a:isoOf(m),b:todayISO()};}
   function renderToday(){
     var cur=doneToday(), plan=dayHours(todayISO());
-    var chips=DONE_CHOICES.map(function(h){
-      var on=(cur!==null&&Math.abs(cur-h)<1e-9);
-      return '<button class="seg-btn'+(on?' on':'')+'" data-done="'+h+'">'+(h%1===0?h:fr(h,1))+'</button>';
-    }).join("");
+    var opts='<option value=""'+(cur===null?' selected':'')+'>Non saisi</option>'
+      +DONE_CHOICES.map(function(h){var on=(cur!==null&&Math.abs(cur-h)<1e-9);return '<option value="'+h+'"'+(on?' selected':'')+'>'+(h%1===0?h:fr(h,1))+' h</option>';}).join("");
     var wb=weekBounds(), real=0, realW=0, n=0;
     for(var k in state.done){real+=state.done[k];n++;if(k>=wb.a&&k<=wb.b)realW+=state.done[k];}
     var planW=hoursBetween(wb.a,wb.b);
     set("todaySub","— "+fmtFR(todayISO())+" · prévu "+frH(plan));
     set("todayLog",
-      '<div class="seg wrap">'+chips+'</div>'
-      +'<div class="seg-cap">'+(cur===null?'<i>Non saisi — touche tes heures réelles (re-touche pour effacer)</i>':'Saisi : <b>'+frH(cur)+'</b>')+'</div>'
+      '<label class="done-row"><span class="done-lb">Heures faites aujourd\'hui</span>'
+      +'<select class="done-select" id="doneSelect" aria-label="Heures révisées aujourd\'hui">'+opts+'</select></label>'
       +'<div class="stat-grid" style="margin-top:12px">'
         +stat(frH(realW)+'<span style="font-size:13px;color:var(--muted)"> / '+frH(planW)+'</span>','Réel / prévu cette semaine')
         +stat(frH(real),'Total saisi · '+n+' j')
@@ -254,13 +254,16 @@
       +'<div class="ring-side"><div class="big">Reste '+fr(100-ov,0)+'% avant le rendu</div>'
       +'<div class="sm">'+(dAv>0?('Soit ~<b>'+fr(need,1)+'%</b>/jour dispo d\'ici le 27/07 ('+dAv+' j).'):'Échéance du 27/07 atteinte.')
       +'<br>Pages rédigées : <b>'+fr(pg.done,0)+'</b> / '+pg.target+'.</div></div></div>');
+    set("msPct", fr(ov,1)+"%"); set("msRest", "reste "+fr(100-ov,0)+"% avant le rendu");
+    var _mf=gId("msFill"); if(_mf)_mf.style.width=Math.max(0,Math.min(100,ov))+"%";
 
     // Parties par groupe
     var html="";
     MEMO_GROUPS.forEach(function(g){
       var parts=MEMO_PARTS.filter(function(p){return p.g===g.id;});
       if(!parts.length)return;
-      html+='<div class="grp"><div class="grp-title"><span>'+esc(g.label)+'</span><span class="gp">'+fr(groupPct(g.id),0)+'%</span></div>';
+      var oid="grp_"+g.id, op=isOpen(oid);
+      html+='<div class="grp acc'+(op?' open':'')+'"><button class="acc-head" data-acc="'+oid+'" aria-expanded="'+op+'"><span class="acc-title">'+esc(g.label)+'</span><span class="acc-badge push">'+fr(groupPct(g.id),0)+'%</span><span class="chev">›</span></button><div class="acc-body">';
       parts.forEach(function(p){
         var pc=partPct(p.id), full=pc>=100;
         var badge="";
@@ -273,7 +276,7 @@
           +'<div class="step"><button class="step-btn" data-part="'+p.id+'" data-dir="-1"'+(pc<=0?' disabled':'')+'>−</button>'
           +'<button class="step-btn" data-part="'+p.id+'" data-dir="1"'+(pc>=100?' disabled':'')+'>+</button></div></div></div>';
       });
-      html+='</div>';
+      html+='</div></div>';
     });
     set("memoParts", html);
 
@@ -495,16 +498,32 @@
   function closeDrawer(){var d=gId("drawer"),bg=gId("drawerBg"),b=gId("menuBtn");if(!d||!bg)return;bg.classList.remove("open");d.classList.remove("open");if(b)b.setAttribute("aria-expanded","false");setTimeout(function(){bg.hidden=true;d.hidden=true;},240);}
 
   /* ---------------- Onglets ---------------- */
+  function headerH(){var h=document.querySelector(".top");return h?h.offsetHeight:56;}
+  var _stickTick=false;
+  function updateMemoSticky(){
+    _stickTick=false;
+    var view=gId("v-memoire"), bar=gId("memoSticky"), ring=gId("memoOverall");
+    if(!view||!bar||!ring)return;
+    var th=headerH(); bar.style.top=th+"px";
+    var show=view.classList.contains("active") && ring.getBoundingClientRect().bottom < th+4;
+    bar.classList.toggle("show",show); bar.setAttribute("aria-hidden",show?"false":"true");
+  }
+  function onScroll(){if(!_stickTick){_stickTick=true;(window.requestAnimationFrame||function(f){f();})(updateMemoSticky);}}
   function activateTab(view){
     document.querySelectorAll(".view").forEach(function(v){v.classList.toggle("active",v.id===view);});
     document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t.getAttribute("data-view")===view);});
     window.scrollTo(0,0);
+    updateMemoSticky();
   }
 
   /* ---------------- Initialisation ---------------- */
   function init(){
     if(!STORAGE_OK){var wb=gId("warnbar");if(wb)wb.hidden=false;}
     renderApps();
+    [["accCorr","corr"],["accNoteForme","note_forme"],["accNoteFond","note_fond"],["accNoteSout","note_sout"]].forEach(function(p){
+      var card=gId(p[0]);if(!card)return;var op=isOpen(p[1]);card.classList.toggle("open",op);
+      var h=card.querySelector(".acc-head");if(h)h.setAttribute("aria-expanded",op);
+    });
     var mb=gId("menuBtn");if(mb)mb.addEventListener("click",openDrawer);
     var dcl=gId("drawerClose");if(dcl)dcl.addEventListener("click",closeDrawer);
     var dbg=gId("drawerBg");if(dbg)dbg.addEventListener("click",closeDrawer);
@@ -529,13 +548,14 @@
     var main=document.querySelector("main");
     if(main){
       main.addEventListener("click",function(e){
+        var ah=e.target.closest&&e.target.closest(".acc-head[data-acc]");
+        if(ah){var aid=ah.getAttribute("data-acc"),acc=ah.closest(".acc");if(acc){var op=!acc.classList.contains("open");acc.classList.toggle("open",op);ah.setAttribute("aria-expanded",op);state.ui.open[aid]=op;save();}return;}
         var s=e.target.closest&&e.target.closest(".step-btn");if(s){stepPart(s.getAttribute("data-part"),parseInt(s.getAttribute("data-dir"),10));return;}
-        var dn=e.target.closest&&e.target.closest(".seg-btn[data-done]");
-        if(dn){var dh=parseFloat(dn.getAttribute("data-done")),dc=doneToday();setDone((dc!==null&&Math.abs(dc-dh)<1e-9)?null:dh);return;}
         var g=e.target.closest&&e.target.closest(".seg-btn[data-crit]");if(g){setLevel(g.getAttribute("data-crit"),parseFloat(g.getAttribute("data-lvl")));return;}
       });
       main.addEventListener("change",function(e){
         var t=e.target;
+        if(t.id==="doneSelect"){setDone(t.value===""?null:parseFloat(t.value));return;}
         if(t.matches&&t.matches("input[data-corr]")){toggleCorr(parseInt(t.getAttribute("data-corr"),10));return;}
         if(t.matches&&t.matches("input[data-ue]")){toggleRev(t.getAttribute("data-ue"),parseInt(t.getAttribute("data-idx"),10));return;}
       });
@@ -559,6 +579,8 @@
     });
 
     // Store partagé : semis one-shot + rafraîchissement quand Coach Muscu écrit
+    window.addEventListener("scroll",onScroll,{passive:true});
+    window.addEventListener("resize",updateMemoSticky);
     seedShared();pRefresh();
     window.addEventListener("storage",function(e){if(e.key===PKEY){pRefresh();renderAll();}});
     document.addEventListener("visibilitychange",function(){if(!document.hidden){pRefresh();renderAll();}});
