@@ -69,7 +69,7 @@
 
   /* ---------------- État (valeurs de la feuille + saisies) ---------------- */
   function seedState(){
-    var st={parts:{}, corr:[], rev:{}, note:{}, done:{}, ui:{open:{}}};
+    var st={parts:{}, corr:[], rev:{}, note:{}, done:{}, ui:{open:{}}, tasks:[]};
     MEMO_PARTS.forEach(function(p){st.parts[p.id]=p.pct;});
     CORRECTIONS.forEach(function(){st.corr.push(false);});
     Object.keys(EXAM_REVISIONS).forEach(function(ue){st.rev[ue]=EXAM_REVISIONS[ue].map(function(){return false;});});
@@ -85,6 +85,22 @@
     if(saved.note)for(var cid in st.note)if(typeof saved.note[cid]==="number")st.note[cid]=saved.note[cid];
     if(saved.done&&typeof saved.done==="object")for(var dk in saved.done){var dv=saved.done[dk];if(typeof dv==="number"&&isFinite(dv)&&dv>=0&&/^\d{4}-\d{2}-\d{2}$/.test(dk))st.done[dk]=dv;}
     if(saved.ui&&saved.ui.open&&typeof saved.ui.open==="object")for(var uk in saved.ui.open)st.ui.open[uk]=!!saved.ui.open[uk];
+    if(Array.isArray(saved.tasks))st.tasks=saved.tasks.filter(function(t){return t&&typeof t==="object"&&typeof t.id==="string";}).map(function(t){
+      var lk=(t.link&&typeof t.link==="object")?{kind:(t.link.kind||"libre"),ref:(t.link.ref==null?null:t.link.ref)}:{kind:"libre",ref:null};
+      return {
+        id:t.id,
+        date:(typeof t.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t.date))?t.date:null,
+        label:(""+(t.label||"")).slice(0,200),
+        done:!!t.done,
+        link:lk,
+        mins:(typeof t.mins==="number"&&isFinite(t.mins)&&t.mins>=0)?t.mins:null,
+        src:(t.src==="auto"?"auto":"user"),
+        bumped:!!t.bumped,
+        credited:(typeof t.credited==="number"&&isFinite(t.credited)&&t.credited>=0?t.credited:0),
+        createdAt:(typeof t.createdAt==="number"?t.createdAt:Date.now()),
+        doneAt:(typeof t.doneAt==="number"?t.doneAt:null)
+      };
+    });
     return st;
   }
   var state = mergeState(rawLoad());
@@ -307,21 +323,21 @@
         +'</div></div>'
         +'<div class="exam-prog">Révisions : '+rev.filter(Boolean).length+'/'+themes.length+' thèmes · '+fr(rp,0)+'%</div>'
         +'<div class="part-bar" style="margin-top:8px"><div class="part-fill'+(rp>=100?' full':'')+'" style="width:'+rp+'%"></div></div>'
-        +'<div style="margin-top:10px">'+checks+'</div>'
+        +'<div class="acc exam-acc'+(isOpen("exam_"+e.id)?' open':'')+'" style="margin-top:10px"><button class="acc-head" data-acc="exam_'+e.id+'" aria-expanded="'+isOpen("exam_"+e.id)+'"><span class="acc-sub">Thèmes à cocher ('+rev.filter(Boolean).length+'/'+themes.length+')</span><span class="chev push">›</span></button><div class="acc-body">'+checks+'</div></div>'
         +'</div></div>';
     }).join(""));
 
     var dS=daysUntil(MEMO_EXAM.date), ng=noteGlobal();
     var elim=ng<DSCG_RULES.eliminatoire, pass=ng>=DSCG_RULES.moyenne;
     set("examFoot",
-      '<div class="sec-title">Soutenance & validation</div>'
+      '<div class="acc exam-acc'+(isOpen("exam_foot")?' open':'')+'"><button class="acc-head" data-acc="exam_foot" aria-expanded="'+isOpen("exam_foot")+'"><span class="acc-title">Soutenance &amp; validation</span><span class="chev push">›</span></button><div class="acc-body">'
       +'<div class="exam" style="border-top:none;padding-top:0"><div class="exam-head">'
       +'<div class="exam-cd'+(dS>=0&&dS<=21?' urgent':'')+'"><div class="n">'+(dS<0?"–":dS)+'</div><div class="u">'+(dS<0?"passé":"jours")+'</div></div>'
       +'<div class="exam-info"><span class="exam-code">'+MEMO_EXAM.code+'</span><div class="exam-title">'+esc(MEMO_EXAM.name)+'</div>'
       +'<div class="exam-meta"><span class="exam-tag">'+fmtFR(MEMO_EXAM.date)+'</span><span class="exam-tag">'+MEMO_EXAM.duration+'</span><span class="exam-tag">coef '+MEMO_EXAM.coef+'</span><span class="exam-tag">'+MEMO_EXAM.ects+' ECTS</span></div>'
       +'</div></div></div>'
       +'<div style="margin-top:12px;font-size:13px;color:var(--muted);line-height:1.5">Diplôme validé si <b style="color:var(--ink)">moyenne générale ≥ 10/20</b> et <b style="color:var(--ink)">aucune note &lt; 6/20</b> (éliminatoire).</div>'
-      +'<div style="margin-top:10px;padding:11px 13px;border-radius:11px;background:'+(elim?'#fdecea':pass?'#e2f3ea':'#fff3e8')+';font-size:13px;font-weight:700;color:'+(elim?'var(--danger)':pass?'var(--done-ink)':'var(--accent)')+'">Note mémoire projetée : '+fr(ng,1)+'/20 '+(elim?'— ⚠ sous le seuil éliminatoire':pass?'— au-dessus de la moyenne ✓':'— sous la moyenne (10), à remonter')+'</div>');
+      +'<div style="margin-top:10px;padding:11px 13px;border-radius:11px;background:'+(elim?'#fdecea':pass?'#e2f3ea':'#fff3e8')+';font-size:13px;font-weight:700;color:'+(elim?'var(--danger)':pass?'var(--done-ink)':'var(--accent)')+'">Note mémoire projetée : '+fr(ng,1)+'/20 '+(elim?'— ⚠ sous le seuil éliminatoire':pass?'— au-dessus de la moyenne ✓':'— sous la moyenne (10), à remonter')+'</div></div></div>');
   }
 
   /* ---------------- Rendu : Planning ---------------- */
@@ -419,8 +435,185 @@
   }
   function renderBilan(){var el=gId("bilanText");if(el)el.value=buildBilan();}
 
+  /* ================= Étape I : écran « Aujourd'hui » (moteur de priorité) =================
+     Répond à « par où je commence ? » : calcule la priorité du jour + 2-3 micro-tâches
+     concrètes calées sur les heures dispo. Les tâches acceptées sont stockées dans
+     memoDSCG_v1 (state.tasks) — JAMAIS dans PKEY. */
+  var GRP_SHORT={lim:"Liminaires",intro:"Intro",p1:"Partie 1",p2:"Partie 2",concl:"Conclusion",ann:"Annexes",terrain:"Terrain",corr:"Corrections"};
+  var sugRoll=0, currentSugs=[];
+
+  function inMemoPhase(){return daysUntil(MEMO_TARGET)>=0;}
+  function partById(id){for(var i=0;i<MEMO_PARTS.length;i++)if(MEMO_PARTS[i].id===id)return MEMO_PARTS[i];return null;}
+  function partExam(id){for(var i=0;i<EXAMS.length;i++)if(EXAMS[i].id===id)return EXAMS[i];return null;}
+  function partRemaining(p){return p.w*(100-partPct(p.id))/100;}            /* effort restant pondéré */
+  function rankedRemaining(pred){
+    return MEMO_PARTS.filter(function(p){return partPct(p.id)<100&&(!pred||pred(p));})
+      .slice().sort(function(a,b){return partRemaining(b)-partRemaining(a);});
+  }
+  function tplFor(p){return (typeof TASK_TEMPLATES!=="undefined"&&(TASK_TEMPLATES[p.id]||TASK_TEMPLATES["g:"+p.g]))||[["Avancer « "+p.name+" »",45]];}
+  function shortName(p){
+    var m=/Chap\.\s*[IVX]+/.exec(p.name), base=GRP_SHORT[p.g]||"";
+    if(m)return (base?base+" · ":"")+m[0];
+    return p.name.length>34?p.name.slice(0,32)+"…":p.name;
+  }
+  function partShortRef(id){var p=partById(id);return p?shortName(p):"";}
+  function nextExam(){var c=EXAMS.filter(function(e){return daysUntil(e.date)>=0;}).sort(function(a,b){return a.date<b.date?-1:1;});return c[0]||null;}
+  function fmtMins(m){m=Math.round(m);if(m<60)return m+" min";var h=Math.floor(m/60),r=m%60;return r?(h+" h"+String(r).padStart(2,"0")):(h+" h");}
+  function capFirst(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
+  function linkChip(l){
+    if(!l)return "";
+    if(l.kind==="corr")return "Correction";
+    if(l.kind==="exam"){var e=partExam(l.ref);return e?e.short:"Examen";}
+    if(l.kind==="part"){var p=partById(l.ref);return p?(GRP_SHORT[p.g]||"Mémoire"):"Mémoire";}
+    return "Libre";
+  }
+  function capByBudget(list,budget){
+    if(!list.length)return list;
+    if(budget<=0.5){ /* jour très court : un seul quick win (préférence correction) */
+      var corr=list.filter(function(x){return x.link&&x.link.kind==="corr";});
+      if(corr.length)return [corr[0]];
+      return [list.slice().sort(function(a,b){return (a.mins||0)-(b.mins||0);})[0]];
+    }
+    var cap=budget*60,acc=0,res=[];
+    list.forEach(function(x){
+      if(res.length>=3)return;
+      if(res.length&&acc+(x.mins||0)>cap)return; /* garde toujours la 1re même si elle dépasse */
+      res.push(x);acc+=(x.mins||0);
+    });
+    return res.length?res:[list[0]];
+  }
+  function suggestToday(){
+    var out=[], iso=todayISO(), budget=dayHours(iso);
+    if(inMemoPhase()){
+      var ranked=rankedRemaining(null);
+      if(ranked.length){var big=ranked[sugRoll%ranked.length],tpl=tplFor(big),tt=tpl[sugRoll%tpl.length];
+        out.push({label:tt[0]+" — "+shortName(big),mins:tt[1],link:{kind:"part",ref:big.id}});}
+      var pages=rankedRemaining(function(p){return p.pages&&(p.pages.target-p.pages.done)>0.4;});
+      var pageP=pages.filter(function(p){return !(out[0]&&out[0].link.ref===p.id);})[0];
+      if(pageP)out.push({label:"Rédiger ~1 page — "+shortName(pageP),mins:60,link:{kind:"part",ref:pageP.id}});
+      var open=[];CORRECTIONS.forEach(function(c,i){if(!state.corr[i])open.push(i);});
+      if(open.length){var ci=open[sugRoll%open.length];out.push({label:"Correction : "+CORRECTIONS[ci],mins:25,link:{kind:"corr",ref:ci}});}
+    }else{
+      var e=nextExam();
+      if(e){var a=state.rev[e.id]||[],th=EXAM_REVISIONS[e.id]||[],picks=[];
+        for(var i=0;i<th.length;i++)if(!a[i])picks.push(i);
+        if(picks.length){var k=picks[sugRoll%picks.length];out.push({label:"Réviser "+e.short+" : "+th[k],mins:60,link:{kind:"exam",ref:e.id}});
+          var rest=picks.filter(function(x){return x!==k;});
+          if(rest.length)out.push({label:"Fiche "+e.short+" : "+th[rest[0]],mins:45,link:{kind:"exam",ref:e.id}});}
+      }
+    }
+    return capByBudget(out,budget);
+  }
+
+  /* ----- opérations sur les tâches (memoDSCG_v1 uniquement, jamais PKEY) ----- */
+  function findTask(id){for(var i=0;i<state.tasks.length;i++)if(state.tasks[i].id===id)return state.tasks[i];return null;}
+  function addTask(o){
+    var lbl=(""+((o&&o.label)||"")).trim();if(!lbl)return;
+    var day=todayISO();
+    if(state.tasks.some(function(t){return t.date===day&&t.label===lbl;}))return; /* pas de doublon du jour */
+    state.tasks.push({
+      id:"t_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+      date:day,label:lbl,done:false,
+      link:(o.link&&typeof o.link==="object")?o.link:{kind:"libre",ref:null},
+      mins:(typeof o.mins==="number"?o.mins:null),
+      src:(o.src==="auto"?"auto":"user"),bumped:false,credited:0,createdAt:Date.now(),doneAt:null
+    });
+    save();renderAll();
+  }
+  function addSuggestion(i){var s=currentSugs[i];if(s)addTask({label:s.label,mins:s.mins,link:s.link,src:"auto"});}
+  function addCustomTask(){var l=(typeof prompt==="function")?prompt("Nouvelle tâche pour aujourd'hui :"):null;if(l&&(""+l).trim())addTask({label:(""+l).trim(),src:"user"});}
+  function toggleTask(id){
+    var t=findTask(id);if(!t)return;
+    t.done=!t.done;t.doneAt=t.done?Date.now():null;
+    var day=(typeof t.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t.date))?t.date:todayISO();
+    if(t.done){
+      // 1 clic = noté : crédite le temps estimé dans le journal d'heures (lu aussi par Coach Muscu)
+      if(t.mins&&!t.credited){var h=Math.round(t.mins/60*100)/100;state.done[day]=Math.round(((state.done[day]||0)+h)*100)/100;t.credited=h;}
+    }else{
+      if(t.credited){state.done[day]=Math.max(0,Math.round(((state.done[day]||0)-t.credited)*100)/100);t.credited=0;}
+      t.bumped=false;
+    }
+    save();renderAll();
+  }
+  function delTask(id){state.tasks=state.tasks.filter(function(t){return t.id!==id;});save();renderAll();}
+  function bumpFromTask(id){var t=findTask(id);if(!t||!t.link||t.link.kind!=="part"||t.bumped)return;t.bumped=true;stepPart(t.link.ref,1);} /* stepPart fait save()+renderAll() */
+
+  /* ----- rendu de la carte « Aujourd'hui » ----- */
+  function focusName(){
+    var s=currentSugs[0];
+    if(s&&s.link&&s.link.kind==="part"){var p=partById(s.link.ref);if(p)return shortName(p);}
+    if(s&&s.link&&s.link.kind==="exam"){var e=partExam(s.link.ref);if(e)return "révisions "+e.short;}
+    if(s)return s.label.length>28?s.label.slice(0,26)+"…":s.label;
+    return "mémoire";
+  }
+  /* ----- suivi du jour (cockpit) : heures révisées + régularité 14 j (codes Coach Muscu) ----- */
+  function doneHours(iso){var v=state.done[iso];return (typeof v==="number"&&isFinite(v)&&v>0)?v:0;}
+  function isoMinus(iso,n){var d=new Date(iso+"T12:00:00");d.setDate(d.getDate()-n);var y=d.getFullYear(),m=("0"+(d.getMonth()+1)).slice(-2),dd=("0"+d.getDate()).slice(-2);return y+"-"+m+"-"+dd;}
+  function regularity(days){
+    var iso=todayISO(),cells=[],count=0,streak=0;
+    for(var i=days-1;i>=0;i--){var d=isoMinus(iso,i),h=doneHours(d);cells.push({d:d,h:h,today:i===0});if(h>0)count++;}
+    for(var j=0;j<days;j++){if(doneHours(isoMinus(iso,j))>0)streak++;else break;}
+    return {cells:cells,count:count,streak:streak};
+  }
+  function trackHTML(){
+    var iso=todayISO(),reg=regularity(14),th=doneHours(iso);
+    var strip=reg.cells.map(function(c){return '<span class="reg-cell'+(c.h>0?' on':'')+(c.today?' today':'')+'" title="'+c.d+' · '+fr(c.h)+' h"></span>';}).join('');
+    return '<div class="coach-track">'
+      +'<div class="ct-head"><span class="ct-h">📚 '+fr(th)+' h <span class="ct-lb">révisées aujourd\'hui</span></span>'
+      +'<span class="ct-streak">'+(reg.streak>0?('🔥 '+reg.streak+' j'):'—')+'</span></div>'
+      +'<div class="reg-strip">'+strip+'</div>'
+      +'<div class="ct-foot">'+reg.count+'/14 jours révisés · 14 derniers jours</div>'
+      +'</div>';
+  }
+
+  function renderCoach(){
+    var iso=todayISO(), budget=dayHours(iso), common=isCommon(iso), ov=memoOverall();
+    currentSugs=suggestToday();
+
+    var head='<div class="coach-top"><div class="coach-kicker">Aujourd\'hui</div>'
+      +'<div class="coach-day">'+esc(capFirst(fmtFR(iso)))+'</div>'
+      +'<div class="coach-sub">'+esc(frH(budget))+' dispo'
+      +(common?' · <span class="coach-tina">🟢 jour commun Tina</span>':'')+'</div></div>';
+
+    var focus;
+    if(inMemoPhase()){
+      focus='<div class="coach-focus">▶ Priorité : <b>'+esc(currentSugs.length?focusName():"mémoire")+'</b></div>'
+        +'<div class="coach-real">Reste <b>'+fr(100-ov,0)+'%</b> du mémoire · ~'+fr(hoursBetween(iso,MEMO_TARGET))+' h dispo d\'ici le 27/07 (J-'+Math.max(0,daysUntil(MEMO_TARGET))+').</div>';
+    }else{
+      var e=nextExam();
+      focus='<div class="coach-focus">▶ Phase révisions'+(e?(' — <b>'+esc(e.short)+'</b> dans '+Math.max(0,daysUntil(e.date))+' j'):'')+'</div>';
+    }
+
+    var sug=currentSugs.length?currentSugs.map(function(s,i){
+      var meta=[];if(s.mins)meta.push('~'+fmtMins(s.mins));if(s.link&&s.link.kind)meta.push(esc(linkChip(s.link)));
+      return '<div class="sug"><div class="sug-main"><div class="sug-lb">'+esc(s.label)+'</div>'
+        +(meta.length?'<div class="sug-meta">'+meta.join(' · ')+'</div>':'')+'</div>'
+        +'<button class="sug-add" data-i="'+i+'" aria-label="Ajouter à mes tâches du jour">＋</button></div>';
+    }).join(''):'<p class="muted" style="margin:2px 0 0">Rien à proposer — tout est à jour 🎉</p>';
+
+    var total=currentSugs.reduce(function(a,s){return a+(s.mins||0);},0);
+    var totalRow=currentSugs.length?'<div class="coach-total">≈ '+fmtMins(total)+' proposé'+(budget>0?(' sur '+esc(frH(budget))+' dispo'):'')+'</div>':'';
+    var actions='<div class="coach-actions"><button class="mini-btn" id="coachRegen">↻ Régénérer</button><button class="mini-btn" id="coachAdd">＋ Tâche</button></div>';
+
+    var mine=state.tasks.filter(function(t){return t.date===iso;});
+    var tasksHtml='';
+    if(mine.length){
+      var doneN=mine.filter(function(t){return t.done;}).length;
+      tasksHtml='<div class="coach-mine-h">Mes tâches du jour <span class="cm-count">'+doneN+'/'+mine.length+'</span></div>'
+        +mine.map(function(t){
+          var bump=(t.done&&t.link&&t.link.kind==="part"&&!t.bumped)?'<div class="task-bump-wrap"><button class="task-bump" data-id="'+t.id+'">＋10 % sur '+esc(partShortRef(t.link.ref))+'</button></div>':'';
+          return '<div class="task-row"><label class="task'+(t.done?' done':'')+'"><input type="checkbox" data-task="'+t.id+'"'+(t.done?' checked':'')+'>'
+            +'<span class="task-lb">'+esc(t.label)+(t.mins?' <span class="task-min">~'+fmtMins(t.mins)+'</span>':'')+'</span></label>'
+            +'<button class="task-del" data-id="'+t.id+'" aria-label="Supprimer la tâche">×</button></div>'+bump;
+        }).join('');
+    }
+
+    set("coachCard",'<div class="card coach">'+head+trackHTML()+focus
+      +'<div class="coach-sugs-h">Proposé pour toi</div><div class="coach-sugs">'+sug+'</div>'+totalRow+actions+tasksHtml+'</div>');
+  }
+
   /* ---------------- Rendu global ---------------- */
-  function renderAll(){renderHdr();renderHome();renderToday();renderMemo();renderExams();renderPlanning();renderNote();renderBilan();}
+  function renderAll(){renderHdr();renderCoach();renderHome();renderToday();renderMemo();renderExams();renderPlanning();renderNote();renderBilan();}
 
   /* ---------------- Interactions : état ---------------- */
   function stepPart(id,dir){if(!(id in state.parts))return;state.parts[id]=clamp(state.parts[id]+dir*10);save();renderAll();}
@@ -445,7 +638,7 @@
   function resetData(){
     if(!confirm("Réinitialiser toutes tes saisies avec les valeurs de la feuille ? (corrections, révisions et curseurs reviennent à l'état de départ ; le journal d'heures est conservé)"))return;
     // NB : ne touche volontairement PAS au store partagé PKEY, ni au journal d'heures (state.done).
-    var keepDone=state.done;state=seedState();state.done=keepDone;save();renderAll();
+    var keepDone=state.done,keepTasks=state.tasks;state=seedState();state.done=keepDone;state.tasks=keepTasks;save();renderAll();
   }
 
   /* ---------------- Étape A : édition du type de jour (bottom-sheet) ---------------- */
@@ -520,7 +713,10 @@
   function init(){
     if(!STORAGE_OK){var wb=gId("warnbar");if(wb)wb.hidden=false;}
     renderApps();
-    [["accCorr","corr"],["accNoteForme","note_forme"],["accNoteFond","note_fond"],["accNoteSout","note_sout"]].forEach(function(p){
+    [["accCorr","corr"],["accNoteForme","note_forme"],["accNoteFond","note_fond"],["accNoteSout","note_sout"],
+     ["accHomeUp","home_up"],["accHomeStats","home_stats"],["accMemoHist","memo_hist"],
+     ["accPlanHours","plan_hours"],["accPlanEvents","plan_events"],
+     ["accNoteBilan","note_bilan"],["accNoteData","note_data"]].forEach(function(p){
       var card=gId(p[0]);if(!card)return;var op=isOpen(p[1]);card.classList.toggle("open",op);
       var h=card.querySelector(".acc-head");if(h)h.setAttribute("aria-expanded",op);
     });
@@ -552,12 +748,19 @@
         if(ah){var aid=ah.getAttribute("data-acc"),acc=ah.closest(".acc");if(acc){var op=!acc.classList.contains("open");acc.classList.toggle("open",op);ah.setAttribute("aria-expanded",op);state.ui.open[aid]=op;save();}return;}
         var s=e.target.closest&&e.target.closest(".step-btn");if(s){stepPart(s.getAttribute("data-part"),parseInt(s.getAttribute("data-dir"),10));return;}
         var g=e.target.closest&&e.target.closest(".seg-btn[data-crit]");if(g){setLevel(g.getAttribute("data-crit"),parseFloat(g.getAttribute("data-lvl")));return;}
+        // Étape I : carte « Aujourd'hui »
+        var sa=e.target.closest&&e.target.closest(".sug-add");if(sa){addSuggestion(parseInt(sa.getAttribute("data-i"),10));return;}
+        if(e.target.closest&&e.target.closest("#coachRegen")){sugRoll++;renderCoach();return;}
+        if(e.target.closest&&e.target.closest("#coachAdd")){addCustomTask();return;}
+        var td=e.target.closest&&e.target.closest(".task-del");if(td){delTask(td.getAttribute("data-id"));return;}
+        var tbp=e.target.closest&&e.target.closest(".task-bump");if(tbp){bumpFromTask(tbp.getAttribute("data-id"));return;}
       });
       main.addEventListener("change",function(e){
         var t=e.target;
         if(t.id==="doneSelect"){setDone(t.value===""?null:parseFloat(t.value));return;}
         if(t.matches&&t.matches("input[data-corr]")){toggleCorr(parseInt(t.getAttribute("data-corr"),10));return;}
         if(t.matches&&t.matches("input[data-ue]")){toggleRev(t.getAttribute("data-ue"),parseInt(t.getAttribute("data-idx"),10));return;}
+        if(t.matches&&t.matches("input[data-task]")){toggleTask(t.getAttribute("data-task"));return;}
       });
     }
 
