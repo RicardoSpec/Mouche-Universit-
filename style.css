@@ -346,3 +346,57 @@ nav.tabs .tab.on{color:var(--primary)}
 .sheet-sub{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:800;margin:14px 0 9px}
 .link-more{display:block;width:100%;margin-top:8px;background:none;border:none;border-top:1px solid var(--line);padding:11px 0 1px;color:var(--primary);font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
 .link-more:active{opacity:.55}
+
+/* ---------- v11 : carte « Aujourd'hui » (moteur de priorité) + tâches du jour ---------- */
+.coach{padding:0;overflow:hidden;border-top:3px solid var(--accent)}
+.coach-top{padding:14px 16px 12px;background:linear-gradient(180deg,#f7fafc,#fff);border-bottom:1px solid var(--line)}
+.coach-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.09em;font-weight:800;color:var(--accent)}
+.coach-day{font-size:18px;font-weight:800;letter-spacing:-.01em;margin-top:2px;text-transform:capitalize}
+.coach-sub{font-size:12.5px;color:var(--muted);font-weight:600;margin-top:3px}
+.coach-tina{color:var(--done-ink);font-weight:700}
+.coach-focus{padding:12px 16px 0;font-size:14px;font-weight:600;line-height:1.4}
+.coach-focus b{color:var(--primary);font-weight:800}
+.coach-real{padding:6px 16px 0;font-size:12.5px;color:var(--muted);line-height:1.5}
+.coach-real b{color:var(--ink);font-weight:800}
+.coach-sugs-h,.coach-mine-h{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:800;padding:14px 16px 8px}
+.coach-mine-h{border-top:1px solid var(--line);margin-top:12px}
+.cm-count{font-family:var(--mono);color:var(--primary);font-weight:800;margin-left:4px}
+.coach-sugs{padding:0 16px}
+.sug{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.sug:first-child{border-top:none}
+.sug-main{flex:1;min-width:0}
+.sug-lb{font-size:14px;font-weight:600;line-height:1.35}
+.sug-meta{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.sug-add{flex:none;width:34px;height:34px;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--accent);font-size:20px;font-weight:800;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sug-add:active{background:#fdf3f1}
+.coach-total{padding:10px 16px 0;font-size:12px;color:var(--muted);font-weight:700;font-family:var(--mono)}
+.coach-actions{display:flex;gap:8px;padding:12px 16px 16px}
+.mini-btn{flex:1;border:1.5px solid var(--line);background:#fff;color:var(--primary);border-radius:11px;padding:10px 12px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.mini-btn:active{background:#f3f6f9}
+.task-row{display:flex;align-items:center;gap:8px;padding:2px 16px;flex-wrap:wrap}
+.task{display:flex;align-items:center;gap:11px;flex:1;min-width:0;padding:9px 0;cursor:pointer}
+.task input{width:20px;height:20px;flex:none;accent-color:var(--accent);cursor:pointer}
+.task-lb{font-size:14px;font-weight:600;line-height:1.35}
+.task.done .task-lb{text-decoration:line-through;color:var(--muted)}
+.task-min{font-size:11.5px;color:var(--muted);font-weight:600;font-family:var(--mono)}
+.task-del{flex:none;width:28px;height:28px;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:var(--muted);font-size:16px;font-weight:700;line-height:1;cursor:pointer}
+.task-del:active{background:#fdf3f1;color:var(--danger)}
+.task-bump-wrap{flex-basis:100%;padding:0 0 8px 31px}
+.task-bump{border:1.5px dashed var(--done-line);background:var(--done-bg);color:var(--done-ink);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
+.task-bump:active{filter:brightness(.97)}
+/* accordéon d'examen : thèmes repliés sous le compte à rebours */
+.exam-acc{border-top:1px solid var(--line);padding-top:2px}
+.exam-acc>.acc-head{padding:11px 0 3px}
+.exam-acc>.acc-body{padding-top:6px}
+
+/* ---------- v12 : suivi du jour (cockpit) — régularité alignée sur Coach Muscu ---------- */
+.coach-track{padding:12px 16px 2px}
+.ct-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.ct-h{font-size:15px;font-weight:800;color:var(--primary)}
+.ct-lb{font-size:12px;font-weight:600;color:var(--muted)}
+.ct-streak{font-size:13px;font-weight:800;color:var(--accent);white-space:nowrap}
+.reg-strip{display:flex;gap:3px;margin-top:9px}
+.reg-cell{flex:1;min-width:0;height:18px;border-radius:5px;background:var(--line)}
+.reg-cell.on{background:var(--primary)}
+.reg-cell.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.ct-foot{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:7px}
