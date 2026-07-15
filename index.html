@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Mémoire DSCG">
   <title>Suivi mémoire & révisions — DSCG</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -38,18 +38,19 @@
 
     <!-- ====================== ACCUEIL ====================== -->
     <section class="view active" id="v-home">
+      <div id="coachCard"></div>
       <div id="heroCard"></div>
       <div class="card pad">
         <div class="sec-title">Révisé aujourd'hui <span class="sub" id="todaySub"></span></div>
         <div id="todayLog"></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">Prochaines échéances <span class="sub">— échéances communes + agenda local</span></div>
-        <div id="upNext"></div>
+      <div class="card pad acc" id="accHomeUp">
+        <button class="acc-head" data-acc="home_up" aria-expanded="false"><span class="acc-title">Prochaines échéances</span><span class="chev push">›</span></button>
+        <div class="acc-body"><p class="muted" style="margin:0 0 10px;font-size:12.5px">Échéances communes + agenda local.</p><div id="upNext"></div></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">En bref</div>
-        <div class="stat-grid" id="homeStats"></div>
+      <div class="card pad acc" id="accHomeStats">
+        <button class="acc-head" data-acc="home_stats" aria-expanded="false"><span class="acc-title">En bref</span><span class="chev push">›</span></button>
+        <div class="acc-body"><div class="stat-grid" id="homeStats"></div></div>
       </div>
     </section>
 
@@ -73,10 +74,10 @@
         <button class="acc-head" data-acc="corr" aria-expanded="false"><span class="acc-title">Corrections à traiter</span><span class="acc-sub push" id="corrCount"></span><span class="chev">›</span></button>
         <div class="acc-body"><div id="corrections"></div></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">Progression dans le temps</div>
-        <div class="hist" id="histChart"></div>
-        <p class="muted" style="margin:10px 0 0;font-size:12px">Les relevés viennent de ta feuille ; le point « aujourd'hui » suit ton % calculé en direct.</p>
+      <div class="card pad acc" id="accMemoHist">
+        <button class="acc-head" data-acc="memo_hist" aria-expanded="false"><span class="acc-title">Progression dans le temps</span><span class="chev push">›</span></button>
+        <div class="acc-body"><div class="hist" id="histChart"></div>
+        <p class="muted" style="margin:10px 0 0;font-size:12px">Les relevés viennent de ta feuille ; le point « aujourd'hui » suit ton % calculé en direct.</p></div>
       </div>
     </section>
 
@@ -111,13 +112,13 @@
           <span><i class="ev"></i>Événement</span>
         </div>
       </div>
-      <div class="card pad">
-        <div class="sec-title">Heures dispo</div>
-        <div class="stat-grid" id="planStats"></div>
+      <div class="card pad acc" id="accPlanHours">
+        <button class="acc-head" data-acc="plan_hours" aria-expanded="false"><span class="acc-title">Heures dispo</span><span class="chev push">›</span></button>
+        <div class="acc-body"><div class="stat-grid" id="planStats"></div></div>
       </div>
-      <div class="card pad">
-        <div class="sec-title" id="evTitle">Événements du mois</div>
-        <div id="evList"></div>
+      <div class="card pad acc" id="accPlanEvents">
+        <button class="acc-head" data-acc="plan_events" aria-expanded="false"><span class="acc-title" id="evTitle">Événements du mois</span><span class="chev push">›</span></button>
+        <div class="acc-body"><div id="evList"></div></div>
       </div>
     </section>
 
@@ -141,20 +142,24 @@
         <div class="acc-body"><div id="critSout"></div></div>
       </div>
 
-      <div class="card pad">
-        <div class="sec-title">Bilan à copier</div>
+      <div class="card pad acc" id="accNoteBilan">
+        <button class="acc-head" data-acc="note_bilan" aria-expanded="false"><span class="acc-title">Bilan à copier</span><span class="chev push">›</span></button>
+        <div class="acc-body">
         <p class="muted" style="margin:0 0 8px;font-size:12.5px">Copie ce texte et colle-le ici dans le chat (avec une question si tu veux un coup de main).</p>
         <textarea id="bilanText" class="bilan" readonly rows="12"></textarea>
         <button class="btn ghost" id="bilanCopy" style="margin-top:8px">Copier le bilan</button>
+        </div>
       </div>
 
-      <div class="card pad">
-        <div class="sec-title">Tes données</div>
+      <div class="card pad acc" id="accNoteData">
+        <button class="acc-head" data-acc="note_data" aria-expanded="false"><span class="acc-title">Tes données</span><span class="chev push">›</span></button>
+        <div class="acc-body">
         <p class="muted" style="margin:0 0 10px;font-size:12.5px">Sauvegarde locale (sur cet appareil uniquement). Exporte régulièrement pour garder une copie sur ton Drive.</p>
         <button class="btn ghost" id="btnExport">Exporter (JSON)</button>
         <label class="btn ghost" for="fileImport" style="margin-top:8px;display:block;text-align:center;cursor:pointer">Importer (JSON)</label>
         <input type="file" id="fileImport" accept="application/json,.json" hidden>
         <button class="btn danger" id="btnReset" style="margin-top:8px">Réinitialiser depuis la feuille</button>
+        </div>
       </div>
     </section>
 
@@ -187,7 +192,7 @@
   <!-- ====================== SCRIPTS ======================
        data.js (données : APPS, MEMO_PARTS, EXAMS, EVENTS, NOTE_CRITERIA…)
        doit être chargé AVANT app.js (logique, rendu, stockage). -->
-  <script src="data.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="data.js?v=12"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
