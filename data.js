@@ -236,3 +236,29 @@ var NOTE_CRITERIA = {
     {id:"s4", label:"Apporter des réponses pertinentes aux questions", level:0.6}
   ]
 };
+
+/* =========================================================
+   5) MODÈLE DE TÂCHES — catalogue de micro-tâches concrètes
+   Utilisé par l'écran « Aujourd'hui » (étape I) pour proposer
+   des actions précises. Chaque entrée : [libellé, minutes].
+   Clé = id de partie (MEMO_PARTS) ; repli "g:<groupe>" ; sinon _generic.
+   100 % éditable : ajoute/retire des lignes librement.
+   ========================================================= */
+var TASK_TEMPLATES = {
+  /* --- parties précises --- */
+  sondage:  [["Relancer les répondants du sondage",30],["Rédiger 2 questions manquantes",25],["Exporter les réponses actuelles",15]],
+  itw:      [["Retranscrire un entretien",45],["Relancer 2 personnes pour un créneau",20]],
+  concl:    [["Rédiger la 1re page de la conclusion",60],["Lister limites & prolongements",30]],
+  annexes:  [["Mettre en forme 3 annexes",40],["Numéroter tableaux, figures & annexes",25]],
+  biblio:   [["Vérifier 5 références (format APA)",30]],
+  agrement: [["Compléter la fiche d'agrément",30]],
+  missions: [["Décrire une mission du cabinet",40]],
+  intro:    [["Peaufiner l'introduction",30]],
+  tdm:      [["Mettre à jour la table des matières",20]],
+  /* --- repli par groupe --- */
+  "g:p1":   [["Relire et resserrer une section",45],["Vérifier les transitions",25]],
+  "g:p2":   [["Relire une section face aux hypothèses (HR)",45],["Vérifier l'analyse des résultats",40]],
+  "g:lim":  [["Compléter un élément liminaire",25]],
+  /* --- repli ultime --- */
+  _generic: [["Rédiger ~1 page",60],["Relire et corriger un passage",30]]
+};
