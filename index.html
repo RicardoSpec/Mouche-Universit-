@@ -4,12 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#12466B">
+  <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Mémoire DSCG">
-  <title>Suivi mémoire & révisions — DSCG</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
-  <link rel="stylesheet" href="style.css?v=12">
+  <meta name="apple-mobile-web-app-title" content="Coach Muscu">
+  <title>Coach Muscu</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <!-- Styles externes -->
+  <link rel="stylesheet" href="style.css?v=137">
 </head>
 <body>
 
@@ -19,12 +23,12 @@
   <header class="top">
     <div class="top-left">
       <button class="menu-btn" id="menuBtn" aria-label="Ouvrir le menu des apps" aria-expanded="false"><span></span><span></span><span></span></button>
-      <h1>Mémoire DSCG</h1>
+      <h1>Suivi muscu</h1>
     </div>
-    <span class="chip" id="hdrChip"></span>
+    <span class="chip" id="wkChip"></span>
   </header>
 
-  <!-- Panneau lanceur d'apps (ouvert par ☰) -->
+  <!-- Panneau lanceur d'apps (ouvert par le bouton ☰) -->
   <div class="drawer-bg" id="drawerBg" hidden></div>
   <aside class="drawer" id="drawer" hidden aria-label="Mes applications">
     <div class="drawer-head">
@@ -32,167 +36,154 @@
       <button class="drawer-close" id="drawerClose" aria-label="Fermer le menu">&times;</button>
     </div>
     <nav class="app-list" id="appList"></nav>
+    <div class="drawer-foot">
+      <button class="drawer-gear" id="settingsBtn"><span class="gear-ic">⚙️</span><span>Réglages</span></button>
+    </div>
   </aside>
 
   <main>
-
-    <!-- ====================== ACCUEIL ====================== -->
-    <section class="view active" id="v-home">
-      <div id="coachCard"></div>
-      <div id="heroCard"></div>
-      <div class="card pad">
-        <div class="sec-title">Révisé aujourd'hui <span class="sub" id="todaySub"></span></div>
-        <div id="todayLog"></div>
+    <!-- ====================== LE JOUR (aujourd'hui ou un jour passé) ======================
+         Un seul écran : la barre de dates choisit le jour, les blocs d'entête
+         (#dayHead) ne s'affichent que si ce jour est aujourd'hui. -->
+    <section class="view active" id="v-day">
+      <div class="datenav">
+        <button class="navbtn" id="dayPrev" aria-label="Jour précédent">‹</button>
+        <div class="dlabel" id="dayLabel"></div>
+        <button class="navbtn" id="dayNext" aria-label="Jour suivant">›</button>
       </div>
-      <div class="card pad acc" id="accHomeUp">
-        <button class="acc-head" data-acc="home_up" aria-expanded="false"><span class="acc-title">Prochaines échéances</span><span class="chev push">›</span></button>
-        <div class="acc-body"><p class="muted" style="margin:0 0 10px;font-size:12.5px">Échéances communes + agenda local.</p><div id="upNext"></div></div>
-      </div>
-      <div class="card pad acc" id="accHomeStats">
-        <button class="acc-head" data-acc="home_stats" aria-expanded="false"><span class="acc-title">En bref</span><span class="chev push">›</span></button>
-        <div class="acc-body"><div class="stat-grid" id="homeStats"></div></div>
-      </div>
-    </section>
-
-    <!-- ====================== MÉMOIRE ====================== -->
-    <section class="view" id="v-memoire">
-      <h2 class="page">Mémoire</h2>
-      <div class="memo-sticky" id="memoSticky" aria-hidden="true">
-        <div class="ms-in">
-          <div class="ms-row"><span class="ms-pct" id="msPct"></span><span class="ms-rest" id="msRest"></span></div>
-          <div class="ms-bar"><div class="ms-fill" id="msFill"></div></div>
+      <div id="onbNudge"></div>
+      <div id="dayHead">
+        <div id="homeCalBlock">
+        <button class="bnd bnd-card bnd-stick" id="homeCalToggle" data-bnd="homecal" data-bndr="homecal"><span class="bnd-ic">📅</span><span class="bnd-txt"><span class="bnd-k">Calendrier</span><span class="bnd-v" id="homeCalSummary"></span></span><span class="bnd-chev">▾</span></button>
+        <div id="homeCal" class="calwrap collapsed"></div>
         </div>
+        <div class="hero" id="heroCard"></div>
       </div>
-      <div class="card pad">
-        <div id="memoOverall"></div>
-      </div>
-      <div class="card pad">
-        <div class="sec-title">Avancement par partie <span class="sub">— touche − / + (pas de 10 %)</span></div>
-        <div id="memoParts"></div>
-      </div>
-      <div class="card pad acc" id="accCorr">
-        <button class="acc-head" data-acc="corr" aria-expanded="false"><span class="acc-title">Corrections à traiter</span><span class="acc-sub push" id="corrCount"></span><span class="chev">›</span></button>
-        <div class="acc-body"><div id="corrections"></div></div>
-      </div>
-      <div class="card pad acc" id="accMemoHist">
-        <button class="acc-head" data-acc="memo_hist" aria-expanded="false"><span class="acc-title">Progression dans le temps</span><span class="chev push">›</span></button>
-        <div class="acc-body"><div class="hist" id="histChart"></div>
-        <p class="muted" style="margin:10px 0 0;font-size:12px">Les relevés viennent de ta feuille ; le point « aujourd'hui » suit ton % calculé en direct.</p></div>
-      </div>
+      <div id="dayRadar"></div>
+      <div id="dayLog"></div>
+      <div id="backupNudge"></div>
     </section>
 
-    <!-- ====================== EXAMENS ====================== -->
-    <section class="view" id="v-exams">
-      <h2 class="page">Examens DSCG</h2>
-      <p class="hint">Session 2026 — écrits du 27 au 29 octobre, oraux dès le 2 novembre. Touche un thème pour le cocher.</p>
-      <div id="examList"></div>
-      <div class="card pad" id="examFoot"></div>
-    </section>
+    <!-- ====================== SPORT (muscu + triathlon) ====================== -->
+    <section class="view" id="v-sport">
+      <h2 class="page">Sport</h2>
+      <div class="subtabs" id="sportSub"></div>
 
-    <!-- ====================== PLANNING ====================== -->
-    <section class="view" id="v-planning">
-      <h2 class="page">Planning</h2>
-      <div class="card pad">
-        <div class="cal-nav">
-          <button class="cal-navbtn" id="calPrev" aria-label="Mois précédent">‹</button>
-          <div class="cal-month" id="calMonth"></div>
-          <button class="cal-navbtn" id="calNext" aria-label="Mois suivant">›</button>
+      <div class="sport-pane" id="sportMuscu">
+        <p class="hint">Enchaîne A → B → C → D, semaine après semaine. Bloc 1 : du 27 juin au 31 juillet (objectif 27 juillet) · Bloc 2 : en août. Touche une case pour ouvrir la séance (charges de la dernière fois pré-affichées, minuteur de repos intégré).</p>
+        <div id="progBlocks"></div>
+        <div class="spacer"></div>
+        <div id="sessionDetail"></div>
+      </div>
+
+      <div class="sport-pane" id="sportTri" hidden>
+        <p class="hint">Plan Distance Olympique — 10 semaines, 3 séances/sem. 🏁 Course les 11-13 septembre (semaine 10). Touche une case pour voir la séance et la cocher. Détails complets dans ton Drive. (* = affûtage)</p>
+        <div id="triProgress"></div>
+        <div class="card pad blockcard open" id="triPlanCard">
+          <button type="button" class="bnd blk-toggle" id="triPlanToggle"><span class="blk-ttl">Plan 10 semaines</span><span class="blk-meta" id="triPlanMeta">0/30</span><span class="bnd-chev">▾</span></button>
+          <div class="blk-body" id="triPlanBody">
+            <div class="legend"><span><i class="dot-done"></i>Faite</span><span><i class="dot-todo"></i>À faire</span></div>
+            <table class="grid" id="triTable"></table>
+          </div>
         </div>
-        <div class="cal-dow"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
-        <div class="cal-grid" id="calGrid"></div>
-        <p class="muted" style="margin:10px 2px 0;font-size:12px">Touche un jour pour changer son type — calendrier partagé avec Coach Muscu.</p>
-        <div class="cal-legend">
-          <span><i class="semaine"></i>Semaine · 0,5 h</span>
-          <span><i class="weekend"></i>Week-end · 6 h</span>
-          <span><i class="cours"></i>Cours · 0,5 h</span>
-          <span><i class="conge"></i>Congé · 6 h</span>
-          <span><i class="repos"></i>Repos</span>
-          <span><i class="indispo"></i>Indispo · 0 h</span>
-          <span><i class="common"></i>Jour commun Tina</span>
-          <span><i class="ev"></i>Événement</span>
-        </div>
+        <div class="spacer"></div>
+        <div id="triDetail"></div>
       </div>
-      <div class="card pad acc" id="accPlanHours">
-        <button class="acc-head" data-acc="plan_hours" aria-expanded="false"><span class="acc-title">Heures dispo</span><span class="chev push">›</span></button>
-        <div class="acc-body"><div class="stat-grid" id="planStats"></div></div>
-      </div>
-      <div class="card pad acc" id="accPlanEvents">
-        <button class="acc-head" data-acc="plan_events" aria-expanded="false"><span class="acc-title" id="evTitle">Événements du mois</span><span class="chev push">›</span></button>
-        <div class="acc-body"><div id="evList"></div></div>
-      </div>
+
+      <h2 class="page learn-h">Apprentissage</h2>
+      <div id="learnPane"></div>
     </section>
 
-    <!-- ====================== NOTE ====================== -->
-    <section class="view" id="v-note">
-      <h2 class="page">Simulateur de note</h2>
-      <p class="hint">Ajuste chaque critère ; la note se recalcule en direct (moyenne des niveaux × 10).</p>
+    <!-- ====================== PROGRÈS ====================== -->
+    <section class="view" id="v-prog2">
+      <h2 class="page">Progrès</h2>
+
+      <div id="progRadar"></div>
+
       <div class="card pad">
-        <div id="noteOut"></div>
-      </div>
-      <div class="card pad acc" id="accNoteForme">
-        <button class="acc-head" data-acc="note_forme" aria-expanded="false"><span class="acc-title">Mémoire écrit — la forme</span><span class="chev push">›</span></button>
-        <div class="acc-body"><div id="critForme"></div></div>
-      </div>
-      <div class="card pad acc" id="accNoteFond">
-        <button class="acc-head" data-acc="note_fond" aria-expanded="false"><span class="acc-title">Mémoire écrit — le fond</span><span class="chev push">›</span></button>
-        <div class="acc-body"><div id="critFond"></div></div>
-      </div>
-      <div class="card pad acc" id="accNoteSout">
-        <button class="acc-head" data-acc="note_sout" aria-expanded="false"><span class="acc-title">Soutenance</span><span class="chev push">›</span></button>
-        <div class="acc-body"><div id="critSout"></div></div>
+        <div class="stat-grid" id="statGrid"></div>
       </div>
 
-      <div class="card pad acc" id="accNoteBilan">
-        <button class="acc-head" data-acc="note_bilan" aria-expanded="false"><span class="acc-title">Bilan à copier</span><span class="chev push">›</span></button>
-        <div class="acc-body">
-        <p class="muted" style="margin:0 0 8px;font-size:12.5px">Copie ce texte et colle-le ici dans le chat (avec une question si tu veux un coup de main).</p>
-        <textarea id="bilanText" class="bilan" readonly rows="12"></textarea>
+      <div id="weekViz"></div>
+
+      <div id="regularity"></div>
+
+      <div class="card pad">
+        <div class="sec-title">Poids</div>
+        <div id="weightChart"></div>
+      </div>
+
+      <div class="card pad">
+        <div class="sec-title">Protéines</div>
+        <div id="proteinChart"></div>
+      </div>
+
+      <!-- Bilan hebdo à copier-coller dans le chat -->
+      <div class="card pad">
+        <div class="sec-title">Bilan de la semaine</div>
+        <p class="muted" style="margin:0 0 8px">Copie ce texte et colle-le ici dans le chat (avec une photo si tu veux une analyse de progression).</p>
+        <textarea id="bilanText" class="bilan" readonly rows="11"></textarea>
         <button class="btn ghost" id="bilanCopy" style="margin-top:8px">Copier le bilan</button>
-        </div>
       </div>
 
-      <div class="card pad acc" id="accNoteData">
-        <button class="acc-head" data-acc="note_data" aria-expanded="false"><span class="acc-title">Tes données</span><span class="chev push">›</span></button>
-        <div class="acc-body">
-        <p class="muted" style="margin:0 0 10px;font-size:12.5px">Sauvegarde locale (sur cet appareil uniquement). Exporte régulièrement pour garder une copie sur ton Drive.</p>
-        <button class="btn ghost" id="btnExport">Exporter (JSON)</button>
-        <label class="btn ghost" for="fileImport" style="margin-top:8px;display:block;text-align:center;cursor:pointer">Importer (JSON)</label>
-        <input type="file" id="fileImport" accept="application/json,.json" hidden>
-        <button class="btn danger" id="btnReset" style="margin-top:8px">Réinitialiser depuis la feuille</button>
-        </div>
+      <!-- Données / sauvegarde : un seul point d'entrée, dans les Réglages -->
+      <div class="card pad">
+        <div class="sec-title">Tes données</div>
+        <p class="muted" style="margin:0 0 10px">Sauvegarde locale (sur cet appareil uniquement). Export, import et remise à zéro sont regroupés au même endroit.</p>
+        <button class="btn ghost" id="dataGo">Réglages ▸ Données →</button>
       </div>
     </section>
 
   </main>
 
-  <!-- Bottom-sheet : édition du type de jour (calendrier partagé) -->
-  <div class="sheet-bg" id="sheetBg" hidden></div>
-  <div class="sheet" id="daySheet" hidden role="dialog" aria-label="Type de jour">
-    <div class="sheet-head">
-      <span class="sheet-title" id="sheetTitle"></span>
-      <button class="sheet-close" id="sheetClose" aria-label="Fermer">&times;</button>
-    </div>
-    <div id="sheetOpts"></div>
-  </div>
+  <!-- Feuille d'action : état d'un jour (ouverte en touchant une case du calendrier) -->
+  <div class="sheet-bg" id="calSheetBg" hidden></div>
+  <div class="sheet" id="calSheet" hidden role="dialog" aria-label="Modifier le jour"></div>
+
+  <!-- Panneau Réglages (plein écran, ouvert par l'engrenage du menu) -->
+  <section class="axis" id="axisView" hidden aria-label="Détail d'une dimension">
+    <header class="axis-head">
+      <button class="axis-back" id="axisBack" aria-label="Retour">‹</button>
+      <button class="axis-title" id="axisTitle"></button>
+    </header>
+    <div class="axis-body" id="axisBody"></div>
+  </section>
+
+  <section class="settings" id="settings" hidden aria-label="Réglages">
+    <header class="settings-head">
+      <button class="settings-close" id="settingsClose" aria-label="Fermer les réglages">‹</button>
+      <span class="settings-title">Réglages</span>
+    </header>
+    <div class="settings-body" id="settingsBody"></div>
+  </section>
 
   <!-- ====================== NAVIGATION ====================== -->
   <nav class="tabs">
-    <button class="tab on" data-view="v-home">
-      <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Accueil</button>
-    <button class="tab" data-view="v-memoire">
-      <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M16 4v3h3"/><path d="M8 11h8M8 15h6"/></svg>Mémoire</button>
-    <button class="tab" data-view="v-exams">
-      <svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.5"/><path d="M22 9v5"/></svg>Examens</button>
-    <button class="tab" data-view="v-planning">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Planning</button>
-    <button class="tab" data-view="v-note">
-      <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg>Note</button>
+    <button class="tab on" data-view="v-day">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Journal</button>
+    <button class="tab" data-view="v-sport">
+      <svg viewBox="0 0 24 24"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg>Objectif</button>
+    <button class="tab" data-view="v-prog2">
+      <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg>Progrès</button>
   </nav>
 
+  <!-- Scanner code-barres (caméra), affiché à la demande -->
+  <div id="crsScanModal" class="scan-modal" hidden>
+    <div class="scan-title">📷 Scanner un produit</div>
+    <div id="crsCam" class="scan-cam"></div>
+    <div class="scan-msg" id="crsScanStatus"></div>
+    <div id="crsZoomWrap" class="scan-zoom" hidden><span>Zoom</span><input type="range" id="crsZoom" class="scan-range" min="1" max="4" step="0.1" value="2"></div>
+    <div class="scan-manual">
+      <div class="scan-manual-l">Pas de lecture ? Saisis le numéro sous le code‑barres :</div>
+      <div class="scan-manual-row"><input type="text" inputmode="numeric" id="crsManualCode" class="scan-manual-in" placeholder="ex. 3017620422003"><button type="button" class="btn accent" id="crsManualGo">Rechercher</button></div>
+    </div>
+    <div class="scan-btns"><button type="button" class="scan-tbtn" id="crsTorch" hidden>🔦 Torche</button><button type="button" class="btn" id="crsScanClose">Fermer</button></div>
+  </div>
+
   <!-- ====================== SCRIPTS ======================
-       data.js (données : APPS, MEMO_PARTS, EXAMS, EVENTS, NOTE_CRITERIA…)
+       Ordre important : data.js (variables PROGRAM, PROGRAM2, TRI, BRISTOL…)
        doit être chargé AVANT app.js (logique, rendu, stockage). -->
-  <script src="data.js?v=12"></script>
-  <script src="app.js?v=12"></script>
+  <script src="data.js?v=137"></script>
+  <script src="app.js?v=137"></script>
 </body>
 </html>
